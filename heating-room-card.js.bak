@@ -1,0 +1,443 @@
+/**
+ * Heating Room Card for Home Assistant
+ *
+ * A custom Lovelace card for displaying detailed heating information per room
+ * including current temperature, target temperature, time to reach target,
+ * and visual indicators for heating status.
+ */
+
+class HeatingRoomCard extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: 'open' });
+  }
+
+  setConfig(config) {
+    if (!config.entity) {
+      throw new Error('Please define an entity');
+    }
+
+    this.config = {
+      entity: config.entity,
+      name: config.name,
+      show_eta: config.show_eta !== false, // Default true
+      show_boost: config.show_boost !== false, // Default true
+      show_trend: config.show_trend !== false, // Default true
+      tap_action: config.tap_action || { action: 'more-info' }
+    };
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+
+    const entity = hass.states[this.config.entity];
+    if (!entity) {
+      this.shadowRoot.innerHTML = `
+        <ha-card>
+          <div class="card-content">
+            <div class="unavailable">Entity ${this.config.entity} not found</div>
+          </div>
+        </ha-card>
+      `;
+      return;
+    }
+
+    this.render(entity);
+  }
+
+  render(entity) {
+    const currentTemp = entity.attributes.current_temperature;
+    const targetTemp = entity.attributes.temperature;
+    const hvacAction = entity.attributes.hvac_action || 'idle';
+    const isHeating = hvacAction === 'heating';
+
+    // Get heating analytics
+    const analytics = entity.attributes.heating_analytics || {};
+    const etaMinutes = analytics.estimated_time_to_target?.minutes;
+    const confidence = analytics.estimated_time_to_target?.confidence_percent;
+    const trend = analytics.temperature_trend;
+
+    // Get boost information
+    const boost = entity.attributes.boost || {};
+    const isBoost = boost.temperature !== null && boost.temperature !== undefined;
+    const boostTimeRemaining = boost.time_remaining_minutes;
+
+    // Determine card state class
+    const stateClass = isHeating ? 'heating' : 'idle';
+
+    // Get friendly name
+    const name = this.config.name || entity.attributes.friendly_name || 'Room';
+
+    this.shadowRoot.innerHTML = `
+      <style>
+        ha-card {
+          cursor: pointer;
+          overflow: hidden;
+          position: relative;
+          transition: all 0.3s ease;
+        }
+
+        ha-card:hover {
+          box-shadow: var(--ha-card-box-shadow, 0 4px 8px rgba(0,0,0,0.1));
+        }
+
+        .card-content {
+          padding: 16px;
+          position: relative;
+        }
+
+        /* Status indicator bar */
+        .status-bar {
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          height: 4px;
+          transition: background-color 0.3s ease;
+        }
+
+        .status-bar.heating {
+          background: linear-gradient(90deg,
+            var(--heating-color, #ff6b35) 0%,
+            var(--heating-color-light, #ff8c42) 100%);
+          animation: pulse 2s ease-in-out infinite;
+        }
+
+        .status-bar.idle {
+          background-color: var(--disabled-text-color, #bbb);
+        }
+
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.7; }
+        }
+
+        /* Header */
+        .header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 12px;
+          margin-top: 4px;
+        }
+
+        .room-name {
+          font-size: 14px;
+          font-weight: 500;
+          color: var(--primary-text-color);
+          opacity: 0.8;
+        }
+
+        .boost-badge {
+          background-color: var(--accent-color, #03a9f4);
+          color: white;
+          padding: 2px 8px;
+          border-radius: 12px;
+          font-size: 11px;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+
+        /* Temperature Display */
+        .temperature-container {
+          display: flex;
+          align-items: baseline;
+          justify-content: space-between;
+          margin-bottom: 16px;
+        }
+
+        .current-temp {
+          font-size: 48px;
+          font-weight: 300;
+          line-height: 1;
+          transition: color 0.3s ease;
+        }
+
+        .current-temp.heating {
+          color: var(--heating-color, #ff6b35);
+        }
+
+        .current-temp.idle {
+          color: var(--primary-text-color);
+        }
+
+        .temp-unit {
+          font-size: 24px;
+          font-weight: 300;
+          margin-left: 4px;
+          opacity: 0.6;
+        }
+
+        .target-temp {
+          display: flex;
+          flex-direction: column;
+          align-items: flex-end;
+          gap: 4px;
+        }
+
+        .target-label {
+          font-size: 11px;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          opacity: 0.6;
+          color: var(--secondary-text-color);
+        }
+
+        .target-value {
+          font-size: 28px;
+          font-weight: 400;
+          color: var(--primary-text-color);
+          opacity: 0.9;
+        }
+
+        /* ETA Display */
+        .eta-container {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 12px;
+          background-color: var(--heating-color-alpha, rgba(255, 107, 53, 0.1));
+          border-radius: 8px;
+          margin-bottom: 12px;
+        }
+
+        .eta-container.idle {
+          background-color: var(--secondary-background-color, #f5f5f5);
+        }
+
+        .eta-icon {
+          font-size: 20px;
+        }
+
+        .eta-content {
+          flex: 1;
+        }
+
+        .eta-label {
+          font-size: 11px;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          opacity: 0.7;
+          margin-bottom: 2px;
+        }
+
+        .eta-value {
+          font-size: 16px;
+          font-weight: 500;
+        }
+
+        .eta-confidence {
+          font-size: 11px;
+          opacity: 0.6;
+          margin-top: 2px;
+        }
+
+        /* Info Row */
+        .info-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding-top: 12px;
+          border-top: 1px solid var(--divider-color, #e0e0e0);
+        }
+
+        .info-item {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 13px;
+          color: var(--secondary-text-color);
+        }
+
+        .trend-icon {
+          font-size: 16px;
+        }
+
+        .trend-icon.rising {
+          color: var(--heating-color, #ff6b35);
+        }
+
+        .trend-icon.falling {
+          color: var(--cool-color, #03a9f4);
+        }
+
+        .trend-icon.stable {
+          color: var(--secondary-text-color);
+        }
+
+        .status-text {
+          font-size: 13px;
+          font-weight: 500;
+        }
+
+        .status-text.heating {
+          color: var(--heating-color, #ff6b35);
+        }
+
+        .status-text.idle {
+          color: var(--secondary-text-color);
+          opacity: 0.7;
+        }
+
+        .unavailable {
+          padding: 16px;
+          text-align: center;
+          color: var(--error-color, #f44336);
+        }
+      </style>
+
+      <ha-card>
+        <div class="status-bar ${stateClass}"></div>
+        <div class="card-content">
+          <!-- Header -->
+          <div class="header">
+            <div class="room-name">${name}</div>
+            ${isBoost ? `<div class="boost-badge">Boost ${boostTimeRemaining ? `${boostTimeRemaining}m` : ''}</div>` : ''}
+          </div>
+
+          <!-- Temperature Display -->
+          <div class="temperature-container">
+            <div class="current-temp ${stateClass}">
+              ${currentTemp !== null && currentTemp !== undefined ? currentTemp.toFixed(1) : '--'}
+              <span class="temp-unit">°C</span>
+            </div>
+            <div class="target-temp">
+              <div class="target-label">Target</div>
+              <div class="target-value">
+                ${targetTemp !== null && targetTemp !== undefined ? targetTemp.toFixed(1) : '--'}°
+              </div>
+            </div>
+          </div>
+
+          <!-- ETA Display (only when heating and ETA available) -->
+          ${this.config.show_eta && isHeating && etaMinutes !== null && etaMinutes !== undefined ? `
+            <div class="eta-container heating">
+              <div class="eta-icon">⏱️</div>
+              <div class="eta-content">
+                <div class="eta-label">Time to Target</div>
+                <div class="eta-value">${this._formatETA(etaMinutes)}</div>
+                ${confidence !== null && confidence !== undefined ? `
+                  <div class="eta-confidence">${confidence}% confidence</div>
+                ` : ''}
+              </div>
+            </div>
+          ` : ''}
+
+          <!-- Info Row -->
+          <div class="info-row">
+            ${this.config.show_trend && trend ? `
+              <div class="info-item">
+                <span class="trend-icon ${trend}">${this._getTrendIcon(trend)}</span>
+                <span>${this._getTrendText(trend)}</span>
+              </div>
+            ` : ''}
+            <div class="status-text ${stateClass}">
+              ${isHeating ? '🔥 Heating' : '✓ Idle'}
+            </div>
+          </div>
+        </div>
+      </ha-card>
+    `;
+
+    // Add tap action
+    this.shadowRoot.querySelector('ha-card').addEventListener('click', () => {
+      this._handleTapAction();
+    });
+  }
+
+  _formatETA(minutes) {
+    if (minutes < 1) return 'Less than 1 min';
+    if (minutes < 60) return `${Math.round(minutes)} min`;
+
+    const hours = Math.floor(minutes / 60);
+    const mins = Math.round(minutes % 60);
+
+    if (mins === 0) return `${hours}h`;
+    return `${hours}h ${mins}m`;
+  }
+
+  _getTrendIcon(trend) {
+    switch (trend) {
+      case 'rising': return '↗';
+      case 'falling': return '↘';
+      case 'stable': return '→';
+      default: return '—';
+    }
+  }
+
+  _getTrendText(trend) {
+    switch (trend) {
+      case 'rising': return 'Rising';
+      case 'falling': return 'Falling';
+      case 'stable': return 'Stable';
+      default: return 'Unknown';
+    }
+  }
+
+  _handleTapAction() {
+    const action = this.config.tap_action;
+
+    if (!action || action.action === 'none') {
+      return;
+    }
+
+    const event = new Event('hass-action', {
+      bubbles: true,
+      composed: true,
+    });
+
+    event.detail = {
+      config: this.config,
+      action: action.action || 'more-info',
+      entity: this.config.entity,
+    };
+
+    this.dispatchEvent(event);
+
+    // Fallback for more-info
+    if (action.action === 'more-info') {
+      const moreInfoEvent = new Event('hass-more-info', {
+        bubbles: true,
+        composed: true,
+      });
+      moreInfoEvent.detail = { entityId: this.config.entity };
+      this.dispatchEvent(moreInfoEvent);
+    }
+  }
+
+  getCardSize() {
+    return 3;
+  }
+
+  static getConfigElement() {
+    return document.createElement('heating-room-card-editor');
+  }
+
+  static getStubConfig() {
+    return {
+      entity: 'climate.living_room_hm',
+      show_eta: true,
+      show_boost: true,
+      show_trend: true,
+    };
+  }
+}
+
+customElements.define('heating-room-card', HeatingRoomCard);
+
+// Register the card with Home Assistant
+window.customCards = window.customCards || [];
+window.customCards.push({
+  type: 'heating-room-card',
+  name: 'Heating Room Card',
+  description: 'A custom card for displaying detailed heating information per room',
+  preview: true,
+  documentationURL: 'https://github.com/your-repo/heating-room-card',
+});
+
+console.info(
+  '%c HEATING-ROOM-CARD %c v1.0.0 ',
+  'color: white; background: #ff6b35; font-weight: bold;',
+  'color: #ff6b35; background: white; font-weight: bold;'
+);
