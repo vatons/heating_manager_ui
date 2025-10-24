@@ -95,13 +95,13 @@ For zone climate entities (e.g., `climate.downstairs_zone_hm`):
 
 ### Method 2: Manual Installation
 
-1. Download `heating-room-card.js`
-2. Copy it to `/config/www/heating-room-card/heating-room-card.js` in your Home Assistant
+1. Download `heating-manager-ui.js`
+2. Copy it to `/config/www/heating-manager-ui/heating-manager-ui.js` in your Home Assistant
 3. Add the resource to your Lovelace configuration:
 
 ```yaml
 resources:
-  - url: /local/heating-room-card/heating-room-card.js
+  - url: /local/heating-manager-ui/heating-manager-ui.js
     type: module
 ```
 
@@ -284,15 +284,15 @@ Want to contribute or customize the card? Here's the structure:
 
 ```
 heating_manager_ui/
-├── heating-room-card.js         # Main card implementation
-├── heating-room-card-editor.js  # Visual configuration editor
-├── hacs.json                    # HACS integration metadata
-├── info.md                      # HACS store listing
-├── README.md                    # This file
-├── INSTALL.md                   # Quick installation guide
-├── CHANGELOG.md                 # Version history
-├── example-dashboard.yaml       # Example Lovelace configurations
-└── example-theme.yaml           # Example Home Assistant themes
+├── heating-manager-ui.js         # Main card implementation
+├── heating-manager-ui-editor.js  # Visual configuration editor
+├── hacs.json                     # HACS integration metadata
+├── info.md                       # HACS store listing
+├── README.md                     # This file
+├── INSTALL.md                    # Quick installation guide
+├── CHANGELOG.md                  # Version history
+├── example-dashboard.yaml        # Example Lovelace configurations
+└── example-theme.yaml            # Example Home Assistant themes
 ```
 
 **Technical Details:**

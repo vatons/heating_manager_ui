@@ -1,6 +1,6 @@
 {
   "name": "Heating Room Card",
   "render_readme": true,
-  "filename": "heating-room-card.js",
+  "filename": "heating-manager-ui.js",
   "homeassistant": "2023.1.0"
 }

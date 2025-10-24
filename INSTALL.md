@@ -21,32 +21,32 @@ Copy the following files to your Home Assistant:
 
 **Option A: Using File Editor or SSH**
 
-1. Create the directory `/config/www/heating-room-card/`
+1. Create the directory `/config/www/heating-manager-ui/`
 2. Copy these files into that directory:
-   - `heating-room-card.js`
-   - `heating-room-card-editor.js`
+   - `heating-manager-ui.js`
+   - `heating-manager-ui-editor.js`
 
 **Option B: Using Samba/Windows File Share**
 
 1. Navigate to your Home Assistant config folder
 2. Go to the `www` folder (create it if it doesn't exist)
-3. Create a new folder called `heating-room-card`
+3. Create a new folder called `heating-manager-ui`
 4. Copy the files into this folder
 
 Your file structure should look like:
 ```
 /config/
 ├── www/
-│   └── heating-room-card/
-│       ├── heating-room-card.js
-│       └── heating-room-card-editor.js
+│   └── heating-manager-ui/
+│       ├── heating-manager-ui.js
+│       └── heating-manager-ui-editor.js
 ```
 
 ### Step 2: Add the Resource to Lovelace
 
 1. Go to **Settings** → **Dashboards** → **Resources** (top right menu)
 2. Click **Add Resource**
-3. Enter the URL: `/local/heating-room-card/heating-room-card.js`
+3. Enter the URL: `/local/heating-manager-ui/heating-manager-ui.js`
 4. Select **JavaScript Module** as the type
 5. Click **Create**
 
@@ -56,7 +56,7 @@ Alternatively, you can add it manually to your `configuration.yaml`:
 lovelace:
   mode: yaml
   resources:
-    - url: /local/heating-room-card/heating-room-card.js
+    - url: /local/heating-manager-ui/heating-manager-ui.js
       type: module
 ```
 
@@ -66,7 +66,7 @@ Repeat step 2 for the editor:
 
 1. Go to **Settings** → **Dashboards** → **Resources**
 2. Click **Add Resource**
-3. Enter the URL: `/local/heating-room-card/heating-room-card-editor.js`
+3. Enter the URL: `/local/heating-manager-ui/heating-manager-ui-editor.js`
 4. Select **JavaScript Module** as the type
 5. Click **Create**
 
@@ -76,9 +76,9 @@ Or add to `configuration.yaml`:
 lovelace:
   mode: yaml
   resources:
-    - url: /local/heating-room-card/heating-room-card.js
+    - url: /local/heating-manager-ui/heating-manager-ui.js
       type: module
-    - url: /local/heating-room-card/heating-room-card-editor.js
+    - url: /local/heating-manager-ui/heating-manager-ui-editor.js
       type: module
 ```
 
@@ -138,14 +138,14 @@ You should now see the card displaying:
 
 **Check 2: Files are in the correct location**
 ```
-/config/www/heating-room-card/heating-room-card.js
-/config/www/heating-room-card/heating-room-card-editor.js
+/config/www/heating-manager-ui/heating-manager-ui.js
+/config/www/heating-manager-ui/heating-manager-ui-editor.js
 ```
 
 **Check 3: Resource URL is correct**
-- Should be `/local/heating-room-card/heating-room-card.js`
-- NOT `/www/heating-room-card/heating-room-card.js`
-- NOT `/config/www/heating-room-card/heating-room-card.js`
+- Should be `/local/heating-manager-ui/heating-manager-ui.js`
+- NOT `/www/heating-manager-ui/heating-manager-ui.js`
+- NOT `/config/www/heating-manager-ui/heating-manager-ui.js`
 
 **Check 4: Clear cache**
 - Hard refresh your browser (Ctrl+F5)
@@ -198,7 +198,7 @@ If analytics are missing, check your Heating Manager configuration.
 
 This error means the card isn't loaded. Follow these steps:
 
-1. Verify files are in `/config/www/heating-room-card/`
+1. Verify files are in `/config/www/heating-manager-ui/`
 2. Check resource is added to Lovelace
 3. Clear browser cache completely
 4. Restart Home Assistant
@@ -210,7 +210,7 @@ This error means the card isn't loaded. Follow these steps:
 
 If you have multiple Home Assistant instances:
 
-1. Copy the files to each instance's `/config/www/heating-room-card/`
+1. Copy the files to each instance's `/config/www/heating-manager-ui/`
 2. Add the resources to each instance's Lovelace configuration
 3. The card will work independently in each instance
 
@@ -227,9 +227,9 @@ To track which version you have installed:
 To update to a new version:
 
 1. Download the new files
-2. Replace the old files in `/config/www/heating-room-card/`
+2. Replace the old files in `/config/www/heating-manager-ui/`
 3. Increment the resource URL (or clear cache):
-   - `/local/heating-room-card/heating-room-card.js?v=2`
+   - `/local/heating-manager-ui/heating-manager-ui.js?v=2`
 4. Hard refresh your browser
 
 ## Getting Help
