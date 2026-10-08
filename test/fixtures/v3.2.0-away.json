@@ -1,0 +1,766 @@
+{
+  "scenario": "Away mode",
+  "homeassistant": "2026.10.0",
+  "heating_manager": "3.2.0",
+  "config": {
+    "unit_system": {
+      "temperature": "\u00b0C"
+    }
+  },
+  "entities": {
+    "climate.downstairs": {
+      "entity_id": "climate.downstairs",
+      "platform": "heating_manager",
+      "device_id": "zone_downstairs"
+    },
+    "climate.downstairs_hall": {
+      "entity_id": "climate.downstairs_hall",
+      "platform": "heating_manager",
+      "device_id": "room_hall"
+    },
+    "climate.downstairs_kitchen": {
+      "entity_id": "climate.downstairs_kitchen",
+      "platform": "heating_manager",
+      "device_id": "room_kitchen"
+    },
+    "climate.downstairs_lounge": {
+      "entity_id": "climate.downstairs_lounge",
+      "platform": "heating_manager",
+      "device_id": "room_lounge"
+    },
+    "climate.downstairs_study": {
+      "entity_id": "climate.downstairs_study",
+      "platform": "heating_manager",
+      "device_id": "room_study"
+    },
+    "climate.heating_manager": {
+      "entity_id": "climate.heating_manager",
+      "platform": "heating_manager",
+      "device_id": "global"
+    },
+    "climate.upstairs": {
+      "entity_id": "climate.upstairs",
+      "platform": "heating_manager",
+      "device_id": "zone_upstairs"
+    },
+    "climate.upstairs_bathroom": {
+      "entity_id": "climate.upstairs_bathroom",
+      "platform": "heating_manager",
+      "device_id": "room_bathroom"
+    }
+  },
+  "states": {
+    "climate.downstairs": {
+      "entity_id": "climate.downstairs",
+      "state": "heat",
+      "attributes": {
+        "hvac_modes": [
+          "heat"
+        ],
+        "min_temp": 5.0,
+        "max_temp": 30.0,
+        "preset_modes": [
+          "schedule",
+          "away",
+          "boost"
+        ],
+        "current_temperature": 17.7,
+        "temperature": 7.0,
+        "hvac_action": "idle",
+        "preset_mode": "away",
+        "zone_id": "downstairs",
+        "heating_demand": false,
+        "heating_demand_requested": false,
+        "demand_hold": null,
+        "heating_demand_mode": "any_room",
+        "monitoring_only": false,
+        "away_mode": true,
+        "rooms_needing_heat": [],
+        "boost": {
+          "active": false,
+          "room_ids": []
+        },
+        "manual_override": {
+          "active": false,
+          "temperature": null
+        },
+        "schedule": {
+          "current_temperature": 18.0,
+          "current_period": {
+            "start": "09:00",
+            "end": "17:00",
+            "temperature": 18.0
+          },
+          "next_period": {
+            "start": "17:00",
+            "end": "22:30",
+            "temperature": 21.0
+          }
+        },
+        "trv_control": {
+          "enabled": true,
+          "trvs": [
+            {
+              "room_id": "lounge",
+              "entity_id": "climate.lounge_trv",
+              "internal_temp": 24.0,
+              "current_offset": 6.0,
+              "learned_offset": 6.2,
+              "setpoint": 6.0
+            },
+            {
+              "room_id": "kitchen",
+              "entity_id": "climate.kitchen_trv",
+              "internal_temp": 21.0,
+              "current_offset": 2.8,
+              "learned_offset": 2.8,
+              "setpoint": 6.0
+            },
+            {
+              "room_id": "study",
+              "entity_id": "climate.study_trv",
+              "internal_temp": 19.0,
+              "current_offset": 2.9,
+              "learned_offset": 2.9,
+              "setpoint": 6.0
+            },
+            {
+              "room_id": "hall",
+              "entity_id": "climate.hall_trv",
+              "internal_temp": 18.5,
+              "current_offset": 0.0,
+              "learned_offset": 0.0,
+              "setpoint": 6.0
+            }
+          ]
+        },
+        "friendly_name": "Downstairs",
+        "supported_features": 17
+      },
+      "last_changed": "2026-01-14T19:00:00+00:00",
+      "last_reported": "2026-01-14T20:00:00+00:00",
+      "last_updated": "2026-01-14T20:00:00+00:00"
+    },
+    "climate.downstairs_hall": {
+      "entity_id": "climate.downstairs_hall",
+      "state": "heat",
+      "attributes": {
+        "hvac_modes": [
+          "heat",
+          "off"
+        ],
+        "min_temp": 5.0,
+        "max_temp": 30.0,
+        "preset_modes": [
+          "schedule",
+          "away",
+          "boost"
+        ],
+        "current_temperature": 18.5,
+        "temperature": 7.0,
+        "hvac_action": "idle",
+        "preset_mode": "away",
+        "zone_id": "downstairs",
+        "zone_name": "Downstairs",
+        "room_id": "hall",
+        "needs_heating": false,
+        "away_mode": true,
+        "boost": {
+          "temperature": null,
+          "end_time": null,
+          "duration_minutes": null,
+          "time_remaining_minutes": null
+        },
+        "manual_override": {
+          "active": false,
+          "temperature": null
+        },
+        "sensors": [],
+        "trv_control": {
+          "enabled": true,
+          "trvs": [
+            {
+              "entity_id": "climate.hall_trv",
+              "internal_temp": 18.5,
+              "current_offset": 0.0,
+              "learned_offset": 0.0,
+              "setpoint": 6.0
+            }
+          ]
+        },
+        "heating_analytics": {
+          "heating_rate_per_hour": null,
+          "cooling_rate_per_hour": 0.0,
+          "estimated_time_to_target": {
+            "minutes": null,
+            "timestamp": null,
+            "confidence_percent": 0
+          },
+          "temperature_trend": "stable",
+          "samples_count": 14
+        },
+        "friendly_name": "Downstairs Hall",
+        "supported_features": 17
+      },
+      "last_changed": "2026-01-14T19:00:00+00:00",
+      "last_reported": "2026-01-14T20:00:00+00:00",
+      "last_updated": "2026-01-14T20:00:00+00:00"
+    },
+    "climate.downstairs_kitchen": {
+      "entity_id": "climate.downstairs_kitchen",
+      "state": "heat",
+      "attributes": {
+        "hvac_modes": [
+          "heat",
+          "off"
+        ],
+        "min_temp": 5.0,
+        "max_temp": 30.0,
+        "preset_modes": [
+          "schedule",
+          "away",
+          "boost"
+        ],
+        "current_temperature": 18.2,
+        "temperature": 7.0,
+        "hvac_action": "idle",
+        "preset_mode": "away",
+        "zone_id": "downstairs",
+        "zone_name": "Downstairs",
+        "room_id": "kitchen",
+        "needs_heating": false,
+        "away_mode": true,
+        "boost": {
+          "temperature": null,
+          "end_time": null,
+          "duration_minutes": null,
+          "time_remaining_minutes": null
+        },
+        "manual_override": {
+          "active": false,
+          "temperature": null
+        },
+        "sensors": [
+          {
+            "entity_id": "sensor.kitchen_temp",
+            "value": 18.16,
+            "last_seen": "2026-01-14T20:00:00+00:00",
+            "last_seen_source": "state_last_reported",
+            "status": "active"
+          }
+        ],
+        "trv_control": {
+          "enabled": true,
+          "trvs": [
+            {
+              "entity_id": "climate.kitchen_trv",
+              "internal_temp": 21.0,
+              "current_offset": 2.8,
+              "learned_offset": 2.8,
+              "setpoint": 6.0
+            }
+          ]
+        },
+        "heating_analytics": {
+          "heating_rate_per_hour": null,
+          "cooling_rate_per_hour": -0.23999999999999488,
+          "estimated_time_to_target": {
+            "minutes": 2790,
+            "timestamp": "2026-01-16T10:30:00-08:00",
+            "confidence_percent": 52
+          },
+          "temperature_trend": "cooling_slowly",
+          "samples_count": 14
+        },
+        "friendly_name": "Downstairs Kitchen",
+        "supported_features": 17
+      },
+      "last_changed": "2026-01-14T19:00:00+00:00",
+      "last_reported": "2026-01-14T20:00:00+00:00",
+      "last_updated": "2026-01-14T20:00:00+00:00"
+    },
+    "climate.downstairs_lounge": {
+      "entity_id": "climate.downstairs_lounge",
+      "state": "heat",
+      "attributes": {
+        "hvac_modes": [
+          "heat",
+          "off"
+        ],
+        "min_temp": 5.0,
+        "max_temp": 30.0,
+        "preset_modes": [
+          "schedule",
+          "away",
+          "boost"
+        ],
+        "current_temperature": 18.0,
+        "temperature": 7.0,
+        "hvac_action": "idle",
+        "preset_mode": "away",
+        "zone_id": "downstairs",
+        "zone_name": "Downstairs",
+        "room_id": "lounge",
+        "needs_heating": false,
+        "away_mode": true,
+        "boost": {
+          "temperature": null,
+          "end_time": null,
+          "duration_minutes": null,
+          "time_remaining_minutes": null
+        },
+        "manual_override": {
+          "active": false,
+          "temperature": null
+        },
+        "sensors": [
+          {
+            "entity_id": "sensor.lounge_temp",
+            "value": 17.8,
+            "last_seen": "2026-01-14T20:00:00+00:00",
+            "last_seen_source": "state_last_reported",
+            "status": "active"
+          },
+          {
+            "entity_id": "sensor.lounge_temp_2",
+            "value": 18.2,
+            "last_seen": "2026-01-14T20:00:00+00:00",
+            "last_seen_source": "state_last_reported",
+            "status": "active"
+          }
+        ],
+        "trv_control": {
+          "enabled": true,
+          "trvs": [
+            {
+              "entity_id": "climate.lounge_trv",
+              "internal_temp": 24.0,
+              "current_offset": 6.0,
+              "learned_offset": 6.2,
+              "setpoint": 6.0
+            }
+          ]
+        },
+        "heating_analytics": {
+          "heating_rate_per_hour": 0.6000000000000083,
+          "cooling_rate_per_hour": 0.6000000000000085,
+          "estimated_time_to_target": {
+            "minutes": null,
+            "timestamp": null,
+            "confidence_percent": 0
+          },
+          "temperature_trend": "heating_slowly",
+          "samples_count": 14
+        },
+        "friendly_name": "Downstairs Lounge",
+        "supported_features": 17
+      },
+      "last_changed": "2026-01-14T19:00:00+00:00",
+      "last_reported": "2026-01-14T20:00:00+00:00",
+      "last_updated": "2026-01-14T20:00:00+00:00"
+    },
+    "climate.downstairs_study": {
+      "entity_id": "climate.downstairs_study",
+      "state": "heat",
+      "attributes": {
+        "hvac_modes": [
+          "heat",
+          "off"
+        ],
+        "min_temp": 5.0,
+        "max_temp": 30.0,
+        "preset_modes": [
+          "schedule",
+          "away",
+          "boost"
+        ],
+        "current_temperature": 16.1,
+        "temperature": 7.0,
+        "hvac_action": "idle",
+        "preset_mode": "away",
+        "zone_id": "downstairs",
+        "zone_name": "Downstairs",
+        "room_id": "study",
+        "needs_heating": false,
+        "away_mode": true,
+        "boost": {
+          "temperature": null,
+          "end_time": null,
+          "duration_minutes": null,
+          "time_remaining_minutes": null
+        },
+        "manual_override": {
+          "active": false,
+          "temperature": null
+        },
+        "sensors": [
+          {
+            "entity_id": "sensor.study_temp",
+            "value": 16.1,
+            "last_seen": "2026-01-14T20:00:00+00:00",
+            "last_seen_source": "state_last_reported",
+            "status": "active"
+          }
+        ],
+        "trv_control": {
+          "enabled": true,
+          "trvs": [
+            {
+              "entity_id": "climate.study_trv",
+              "internal_temp": 19.0,
+              "current_offset": 2.9,
+              "learned_offset": 2.9,
+              "setpoint": 6.0
+            }
+          ]
+        },
+        "heating_analytics": {
+          "heating_rate_per_hour": 0.0,
+          "cooling_rate_per_hour": null,
+          "estimated_time_to_target": {
+            "minutes": null,
+            "timestamp": null,
+            "confidence_percent": 0
+          },
+          "temperature_trend": "insufficient_data",
+          "samples_count": 14
+        },
+        "friendly_name": "Downstairs Study",
+        "supported_features": 17
+      },
+      "last_changed": "2026-01-14T19:00:00+00:00",
+      "last_reported": "2026-01-14T20:00:00+00:00",
+      "last_updated": "2026-01-14T20:00:00+00:00"
+    },
+    "climate.hall_trv": {
+      "entity_id": "climate.hall_trv",
+      "state": "heat",
+      "attributes": {
+        "hvac_modes": [
+          "heat",
+          "off",
+          "auto"
+        ],
+        "min_temp": 5.0,
+        "max_temp": 30.0,
+        "current_temperature": 18.5,
+        "temperature": 6.0,
+        "friendly_name": "hall_trv",
+        "supported_features": 385
+      },
+      "last_changed": "2026-01-14T19:00:00+00:00",
+      "last_reported": "2026-01-14T20:00:00+00:00",
+      "last_updated": "2026-01-14T20:00:00+00:00"
+    },
+    "climate.heating_manager": {
+      "entity_id": "climate.heating_manager",
+      "state": "heat",
+      "attributes": {
+        "hvac_modes": [
+          "heat"
+        ],
+        "min_temp": 5.0,
+        "max_temp": 30.0,
+        "preset_modes": [
+          "schedule",
+          "away",
+          "boost"
+        ],
+        "current_temperature": 17.7,
+        "temperature": 7.0,
+        "hvac_action": "idle",
+        "preset_mode": "away",
+        "away_mode": true,
+        "total_zones": 2,
+        "demand_hold": null,
+        "zones_demanding_heat": 0,
+        "heating": {
+          "zones_needing_heat": [],
+          "rooms_needing_heat": []
+        },
+        "boost": {
+          "active": false,
+          "room_ids": []
+        },
+        "manual_override": {
+          "active": false,
+          "zones": []
+        },
+        "trv_control": {
+          "enabled": true,
+          "total_trvs": 4,
+          "avg_current_offset": 2.9,
+          "avg_learned_offset": 3.0,
+          "trvs": [
+            {
+              "zone_id": "downstairs",
+              "room_id": "lounge",
+              "entity_id": "climate.lounge_trv",
+              "internal_temp": 24.0,
+              "current_offset": 6.0,
+              "learned_offset": 6.2,
+              "setpoint": 6.0
+            },
+            {
+              "zone_id": "downstairs",
+              "room_id": "kitchen",
+              "entity_id": "climate.kitchen_trv",
+              "internal_temp": 21.0,
+              "current_offset": 2.8,
+              "learned_offset": 2.8,
+              "setpoint": 6.0
+            },
+            {
+              "zone_id": "downstairs",
+              "room_id": "study",
+              "entity_id": "climate.study_trv",
+              "internal_temp": 19.0,
+              "current_offset": 2.9,
+              "learned_offset": 2.9,
+              "setpoint": 6.0
+            },
+            {
+              "zone_id": "downstairs",
+              "room_id": "hall",
+              "entity_id": "climate.hall_trv",
+              "internal_temp": 18.5,
+              "current_offset": 0.0,
+              "learned_offset": 0.0,
+              "setpoint": 6.0
+            }
+          ]
+        },
+        "friendly_name": "Heating Manager",
+        "supported_features": 17
+      },
+      "last_changed": "2026-01-14T19:00:00+00:00",
+      "last_reported": "2026-01-14T20:00:00+00:00",
+      "last_updated": "2026-01-14T20:00:00+00:00"
+    },
+    "climate.kitchen_trv": {
+      "entity_id": "climate.kitchen_trv",
+      "state": "heat",
+      "attributes": {
+        "hvac_modes": [
+          "heat",
+          "off",
+          "auto"
+        ],
+        "min_temp": 5.0,
+        "max_temp": 30.0,
+        "current_temperature": 21.0,
+        "temperature": 6.0,
+        "friendly_name": "kitchen_trv",
+        "supported_features": 385
+      },
+      "last_changed": "2026-01-14T19:00:00+00:00",
+      "last_reported": "2026-01-14T20:00:00+00:00",
+      "last_updated": "2026-01-14T20:00:00+00:00"
+    },
+    "climate.lounge_trv": {
+      "entity_id": "climate.lounge_trv",
+      "state": "heat",
+      "attributes": {
+        "hvac_modes": [
+          "heat",
+          "off",
+          "auto"
+        ],
+        "min_temp": 5.0,
+        "max_temp": 30.0,
+        "current_temperature": 24.0,
+        "temperature": 6.0,
+        "friendly_name": "lounge_trv",
+        "supported_features": 385
+      },
+      "last_changed": "2026-01-14T19:00:00+00:00",
+      "last_reported": "2026-01-14T20:00:00+00:00",
+      "last_updated": "2026-01-14T20:00:00+00:00"
+    },
+    "climate.study_trv": {
+      "entity_id": "climate.study_trv",
+      "state": "heat",
+      "attributes": {
+        "hvac_modes": [
+          "heat",
+          "off",
+          "auto"
+        ],
+        "min_temp": 5.0,
+        "max_temp": 30.0,
+        "current_temperature": 19.0,
+        "temperature": 6.0,
+        "friendly_name": "study_trv",
+        "supported_features": 385
+      },
+      "last_changed": "2026-01-14T19:00:00+00:00",
+      "last_reported": "2026-01-14T20:00:00+00:00",
+      "last_updated": "2026-01-14T20:00:00+00:00"
+    },
+    "climate.upstairs": {
+      "entity_id": "climate.upstairs",
+      "state": "heat",
+      "attributes": {
+        "hvac_modes": [
+          "heat"
+        ],
+        "min_temp": 5.0,
+        "max_temp": 30.0,
+        "preset_modes": [
+          "schedule",
+          "away",
+          "boost"
+        ],
+        "current_temperature": 20.3,
+        "temperature": 7.0,
+        "hvac_action": "idle",
+        "preset_mode": "away",
+        "zone_id": "upstairs",
+        "heating_demand": false,
+        "heating_demand_requested": false,
+        "demand_hold": null,
+        "heating_demand_mode": "any_room",
+        "monitoring_only": true,
+        "away_mode": true,
+        "rooms_needing_heat": [],
+        "boost": {
+          "active": false,
+          "room_ids": []
+        },
+        "manual_override": {
+          "active": false,
+          "temperature": null
+        },
+        "schedule": {
+          "current_temperature": 18.0,
+          "current_period": {
+            "start": "09:00",
+            "end": "17:00",
+            "temperature": 18.0
+          },
+          "next_period": {
+            "start": "17:00",
+            "end": "22:30",
+            "temperature": 21.0
+          }
+        },
+        "friendly_name": "Upstairs",
+        "supported_features": 17
+      },
+      "last_changed": "2026-01-14T19:00:00+00:00",
+      "last_reported": "2026-01-14T20:00:00+00:00",
+      "last_updated": "2026-01-14T20:00:00+00:00"
+    },
+    "climate.upstairs_bathroom": {
+      "entity_id": "climate.upstairs_bathroom",
+      "state": "heat",
+      "attributes": {
+        "hvac_modes": [
+          "heat",
+          "off"
+        ],
+        "min_temp": 5.0,
+        "max_temp": 30.0,
+        "preset_modes": [
+          "schedule",
+          "away",
+          "boost"
+        ],
+        "current_temperature": 20.3,
+        "temperature": 7.0,
+        "hvac_action": "idle",
+        "preset_mode": "away",
+        "zone_id": "upstairs",
+        "zone_name": "Upstairs",
+        "room_id": "bathroom",
+        "needs_heating": false,
+        "away_mode": true,
+        "boost": {
+          "temperature": null,
+          "end_time": null,
+          "duration_minutes": null,
+          "time_remaining_minutes": null
+        },
+        "manual_override": {
+          "active": false,
+          "temperature": null
+        },
+        "sensors": [
+          {
+            "entity_id": "sensor.bathroom_temp",
+            "value": 20.3,
+            "last_seen": "2026-01-14T20:00:00+00:00",
+            "last_seen_source": "state_last_reported",
+            "status": "active"
+          }
+        ],
+        "heating_analytics": {
+          "heating_rate_per_hour": null,
+          "cooling_rate_per_hour": 0.0,
+          "estimated_time_to_target": {
+            "minutes": null,
+            "timestamp": null,
+            "confidence_percent": 0
+          },
+          "temperature_trend": "stable",
+          "samples_count": 14
+        },
+        "friendly_name": "Upstairs Bathroom",
+        "supported_features": 17
+      },
+      "last_changed": "2026-01-14T19:00:00+00:00",
+      "last_reported": "2026-01-14T20:00:00+00:00",
+      "last_updated": "2026-01-14T20:00:00+00:00"
+    },
+    "sensor.bathroom_temp": {
+      "entity_id": "sensor.bathroom_temp",
+      "state": "20.3",
+      "attributes": {
+        "unit_of_measurement": "\u00b0C"
+      },
+      "last_changed": "2026-01-14T19:00:00+00:00",
+      "last_reported": "2026-01-14T20:00:00+00:00",
+      "last_updated": "2026-01-14T19:00:00+00:00"
+    },
+    "sensor.kitchen_temp": {
+      "entity_id": "sensor.kitchen_temp",
+      "state": "18.16",
+      "attributes": {
+        "unit_of_measurement": "\u00b0C"
+      },
+      "last_changed": "2026-01-14T20:00:00+00:00",
+      "last_reported": "2026-01-14T20:00:00+00:00",
+      "last_updated": "2026-01-14T20:00:00+00:00"
+    },
+    "sensor.lounge_temp": {
+      "entity_id": "sensor.lounge_temp",
+      "state": "17.8",
+      "attributes": {
+        "unit_of_measurement": "\u00b0C"
+      },
+      "last_changed": "2026-01-14T20:00:00+00:00",
+      "last_reported": "2026-01-14T20:00:00+00:00",
+      "last_updated": "2026-01-14T20:00:00+00:00"
+    },
+    "sensor.lounge_temp_2": {
+      "entity_id": "sensor.lounge_temp_2",
+      "state": "18.2",
+      "attributes": {
+        "unit_of_measurement": "\u00b0C"
+      },
+      "last_changed": "2026-01-14T20:00:00+00:00",
+      "last_reported": "2026-01-14T20:00:00+00:00",
+      "last_updated": "2026-01-14T20:00:00+00:00"
+    },
+    "sensor.study_temp": {
+      "entity_id": "sensor.study_temp",
+      "state": "16.1",
+      "attributes": {
+        "unit_of_measurement": "\u00b0C"
+      },
+      "last_changed": "2026-01-14T19:00:00+00:00",
+      "last_reported": "2026-01-14T20:00:00+00:00",
+      "last_updated": "2026-01-14T19:00:00+00:00"
+    }
+  }
+}

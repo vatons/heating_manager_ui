@@ -1,6 +1,6 @@
 {
-  "name": "Heating Room Card",
+  "name": "Heating Manager cards",
   "render_readme": true,
   "filename": "heating-manager-ui.js",
-  "homeassistant": "2023.1.0"
+  "homeassistant": "2025.7.0"
 }

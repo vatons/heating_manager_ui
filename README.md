@@ -1,327 +1,171 @@
-# Heating Room Card
+# Heating Manager cards
 
-A beautiful, modern custom Lovelace card for displaying detailed heating information in Home Assistant. This is a **frontend UI component** designed specifically for the [Heating Manager](#heating-manager-dependency) custom component.
+Dashboard cards for the [Heating Manager](https://github.com/vatons/heating_manager) integration for Home Assistant.
 
-## Prerequisites
+- **Heating Manager room** (`custom:heating-room-card`): one room, a zone or the whole house. Temperature, target with − / + buttons, boost with a live countdown, on/off, the next schedule change, trend and time to target.
+- **Heating Manager zone** (`custom:heating-zone-card`): a zone and all of its rooms, found automatically. Each room shows its temperature, target and status, with its own boost button.
 
-**⚠️ IMPORTANT:** This card requires the **Heating Manager** custom component to be installed and configured first.
+Both cards have a visual editor, so you don't need YAML.
 
-### Required Dependencies
+## Requirements
 
-1. **Home Assistant**: 2023.1 or later
-2. **[Heating Manager Integration](https://github.com/vatons/heating_manager)**: This custom component **must** be installed and configured
-   - The Heating Manager integration creates the climate entities that this card displays
-   - Without it, this card will not work
-   - See [Heating Manager Dependency](#heating-manager-dependency) section below for details
+| | Version |
+|---|---|
+| Home Assistant | 2025.7 or later (tested on 2026.10) |
+| Heating Manager | 3.2 or later |
 
-### Heating Manager Dependency
-
-This card is a **UI component** for the **Heating Manager** custom integration. The Heating Manager integration provides:
-- Multi-zone heating management with schedules
-- Room-level temperature control and boost functionality
-- Climate entities with naming pattern: `climate.<room_id>_hm`
-- Heating analytics data (ETA, trends, confidence metrics)
-- Smart TRV control and sensor management
-
-**Where to get Heating Manager:**
-- **GitHub Repository**: [https://github.com/vatons/heating_manager](https://github.com/vatons/heating_manager)
-- Installation: Follow the installation instructions in the Heating Manager README
-- Configuration: Create a `heating_manager.yaml` file with your zones and rooms
-- Version: 1.0.0 or later required
-
-**Installation Order:**
-1. ✅ Install and configure **[Heating Manager](https://github.com/vatons/heating_manager)** integration first
-2. ✅ Verify climate entities are created (e.g., `climate.living_room_hm`)
-3. ✅ Then install **Heating Room Card** (this component)
-
-## Features
-
-- **Large, easy-to-read temperature display** with current and target temperatures
-- **Visual heating indicator** - Status bars change color when actively heating (orange when heating, gray when idle)
-- **Boost button with countdown timer** - One-click boost activation with real-time countdown display
-- **Zone support** - Works with both room and zone climate entities
-- **Tap actions** - Customizable card tap actions (more-info, none, call-service)
-- **Fully themed** - Matches Home Assistant's Material Design theme with custom CSS variables
-- **Visual configuration editor** - Easy setup through Home Assistant UI
-- **Optimistic UI updates** - Immediate visual feedback when activating/deactivating boost
-
-## Card Display
-
-### Heating State (Active)
-When the room is actively heating, the card displays:
-- **Orange status bars** at top and bottom
-- **Current temperature** in large orange text
-- **Target temperature** below current temperature
-- **Boost button** (rocket icon) in header
-
-### Idle State (Not Heating)
-When the room is not heating:
-- **Gray status bars**
-- **Current temperature** in standard text color
-- **Target temperature** below current temperature
-- **Boost button** (rocket icon) in header
-
-### Boost Mode Active
-When boost is active on a room:
-- **Orange countdown timer** button showing time remaining (MM:SS or HH:MM:SS format)
-- All heating indicators active
-- Clicking the countdown button deactivates boost
-
-### Zone Entities
-For zone climate entities (e.g., `climate.downstairs_zone_hm`):
-- Same display as rooms
-- Boost button shows orange rocket icon when zone has active boosts
-- No countdown timer (zones don't have individual boost state)
+Version 2 of the cards works with the entities Heating Manager 3.x creates (`climate.downstairs`, `climate.downstairs_lounge`, …). For Heating Manager 1.x and 2.x (`climate.<room>_hm`), use version 1.0 of the cards.
 
 ## Installation
 
-**Before proceeding**: Make sure you have installed and configured the [Heating Manager integration](https://github.com/vatons/heating_manager) first. This card will not work without it.
+### HACS (recommended)
 
-### Method 1: HACS (Recommended)
+1. In HACS, open the menu (⋮) → **Custom repositories**, add `https://github.com/vatons/heating_manager_ui` with type **Dashboard**.
+2. Search for **Heating Manager cards** and download it. HACS adds the dashboard resource for you.
+3. Reload your browser.
 
-1. Open HACS in Home Assistant
-2. Go to "Frontend"
-3. Click the three dots (⋮) in the top right corner
-4. Select "Custom repositories"
-5. Add the repository URL: `https://github.com/vatons/heating_manager_ui`
-6. Select category: "Lovelace"
-7. Click "Add"
-8. Find "Heating Room Card" in the Frontend section
-9. Click "Download"
-10. **Restart Home Assistant**
-11. Clear your browser cache (Ctrl+F5 / Cmd+Shift+R)
+### Manual
 
-**Note:** HACS automatically adds the resource to your Lovelace configuration.
+1. Copy `heating-manager-ui.js` to `/config/www/heating-manager-ui.js`.
+2. Go to **Settings → Dashboards → ⋮ → Resources → Add resource**, enter `/local/heating-manager-ui.js` and choose **JavaScript module**.
+3. Reload your browser.
 
-### Method 2: Manual Installation
+## Adding a card
 
-1. Download `heating-manager-ui.js`
-2. Copy it to `/config/www/heating-manager-ui/heating-manager-ui.js` in your Home Assistant
-3. Add the resource to your Lovelace configuration:
+1. Edit a dashboard and choose **Add card** (in a sections view, the **+** in a section).
+2. Choose **By card** and search for **Heating Manager**. The previews show your own rooms and zones.
+3. Pick **Heating Manager room** or **Heating Manager zone**, then choose the room or zone. The entity list only shows Heating Manager entities.
 
-```yaml
-resources:
-  - url: /local/heating-manager-ui/heating-manager-ui.js
-    type: module
-```
+## What the cards show
 
-4. Restart Home Assistant
-5. Clear your browser cache
+### Room card
 
-## Configuration
+![Room, zone and whole-house cards](docs/dashboard.png)
 
-### Basic Usage
+- **Temperature** and **target**. Use − / + to change the target: the card waits a second after your last tap and then sends one change, so tapping + three times sends one update. Steps are 0.5 °C (1 °F).
+- **Status**: what the room is following, such as `Schedule until 17:00`, `Manual until 17:00`, `Boost · 42:10 left to 21.0°C`, `Away · frost protection` or `Off`.
+- **Chip**: `Heating`, `Idle`, `Off`, or `Monitoring` for rooms in a monitoring-only zone.
+- **Details**: the next schedule change, the temperature trend, the time to reach the target when the room is heating (`rough estimate` when the integration's confidence is under 50%), sensors that have stopped reporting, and `Using TRV temperature` for rooms without a sensor.
+- **Buttons**:
+  - **Boost** starts a boost for the integration's boost duration (or `boost_duration`); **Cancel boost** ends it. Rooms without a temperature sensor can't be boosted, so the button is disabled there.
+  - **Resume schedule** appears after you change the target, and clears the manual temperature.
+  - **Turn off / Turn on** switches the room off (its TRVs are held at the minimum and it never calls for heat) or back on. Boosting a room that's off turns it back on.
 
-Add the card to your Lovelace dashboard:
+Changes show on the card straight away. Heating Manager refreshes at most every 10 seconds, so the card keeps showing your change until the entity catches up (or for 15 seconds). If Home Assistant rejects a change, the card goes back and shows why.
 
-```yaml
-type: custom:heating-room-card
-entity: climate.living_room_hm
-```
+In away mode, targets are frost protection, so the target buttons are hidden and you can't start a boost. A boost that was already running can still be cancelled.
 
-### Full Configuration
+### Zone and whole-house entities on the room card
 
-```yaml
-type: custom:heating-room-card
-entity: climate.living_room_hm
-name: Living Room  # Optional: Override entity name
-tap_action:  # Optional: Custom tap action
-  action: more-info
-```
+Pick a zone (e.g. `climate.downstairs`) or `climate.heating_manager` for the whole house:
 
-### Configuration Options
+- The average temperature and target. − / + set a manual temperature for the zone (or every zone).
+- How many rooms need heat, the schedule, and boiler protection holds (`Heating (min on)`, `Waiting (min off)`).
+- **Boost all** boosts every room with a sensor; **Cancel boosts** goes back to the schedule (clearing boosts and manual temperatures).
+- The whole-house card has **Away** to switch away mode on or off for every zone.
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `entity` | string | **Required** | The climate entity ID (e.g., `climate.living_room_hm`) |
-| `name` | string | Entity name | Custom name to display in the card header |
-| `tap_action` | object | `{action: 'more-info'}` | Action when card is clicked |
+### Zone card
 
-### Tap Actions
+![Zone card](docs/zone-card.png)
 
-You can customize what happens when you click the card:
+Lists every room in the zone with its temperature, target and status. Rooms you add to the zone later appear without editing the card. Tap a room for its details, or its rocket to boost it. **Boost all** / **Cancel boosts** act on the whole zone.
 
-```yaml
-tap_action:
-  action: more-info  # Opens the entity details dialog
-```
+## Options
 
-```yaml
-tap_action:
-  action: none  # Disables clicking
-```
-
-```yaml
-tap_action:
-  action: call-service
-  service: heating_manager.set_boost
-  service_data:
-    zone_id: downstairs
-    room_id: living_room
-    duration: 60
-```
-
-## Layout Examples
-
-### Single Room
+### Room card
 
 ```yaml
 type: custom:heating-room-card
-entity: climate.living_room_hm
+entity: climate.downstairs_lounge   # a room, a zone or climate.heating_manager
 ```
 
-### Grid Layout (Multiple Rooms)
+| Option | Default | Description |
+|---|---|---|
+| `entity` | required | A Heating Manager climate entity |
+| `name` | room name | Name shown on the card. Room names are shown without their zone (`Lounge`, not `Downstairs Lounge`) |
+| `show_controls` | `true` | Target − / + and the buttons |
+| `show_schedule` | `true` | The next schedule change |
+| `show_analytics` | `true` | Trend and time to target |
+| `boost_duration` | integration setting | Boost length in minutes |
+| `tap_action` | `more-info` | [Action](https://www.home-assistant.io/dashboards/actions/) when the card is tapped |
+| `hold_action` | `none` | Action when the card is held |
+
+### Zone card
 
 ```yaml
-type: grid
-columns: 2
-square: false
-cards:
-  - type: custom:heating-room-card
-    entity: climate.living_room_hm
-  - type: custom:heating-room-card
-    entity: climate.kitchen_hm
-  - type: custom:heating-room-card
-    entity: climate.bedroom_hm
-  - type: custom:heating-room-card
-    entity: climate.office_hm
+type: custom:heating-zone-card
+entity: climate.downstairs
 ```
 
-### Vertical Stack (Zone View)
+| Option | Default | Description |
+|---|---|---|
+| `entity` | required | A Heating Manager zone entity |
+| `name` | zone name | Name shown on the card |
+| `rooms` | all rooms | Room entities to show, in this order |
+| `show_controls` | `true` | Boost buttons |
+| `show_room_boost` | `true` | A boost button on each room |
+| `boost_duration` | integration setting | Boost length in minutes for the room buttons |
+| `tap_action` | `more-info` | Action when the zone's title is tapped |
 
-```yaml
-type: vertical-stack
-cards:
-  - type: markdown
-    content: "## Downstairs Zone"
-  - type: custom:heating-room-card
-    entity: climate.living_room_hm
-  - type: custom:heating-room-card
-    entity: climate.kitchen_hm
-  - type: markdown
-    content: "## Upstairs Zone"
-  - type: custom:heating-room-card
-    entity: climate.bedroom_hm
-  - type: custom:heating-room-card
-    entity: climate.office_hm
-```
+See [example-dashboard.yaml](example-dashboard.yaml) for more.
 
 ## Theming
 
-The card uses Home Assistant's CSS variables for theming. You can customize colors in your theme:
+The cards use your theme's colours. To change them, set these in your theme (see [example-theme.yaml](example-theme.yaml)):
 
-```yaml
-# Example theme customization
-my-theme:
-  # Heating color (when actively heating)
-  heating-color: "#ff6b35"
-  heating-color-light: "#ff8c42"
-  heating-color-alpha: "rgba(255, 107, 53, 0.1)"
+| Variable | Used for | Default |
+|---|---|---|
+| `heating-color` | Heating status, temperature and bar | `state-climate-heat-color`, else `#ff6b35` |
+| `heating-color-light` | End of the heating bar's gradient | `#ff8c42` |
+| `heating-color-alpha` | Heating chip background | `rgba(255, 107, 53, 0.12)` |
+| `boost-color` | Active boost and away buttons | `heating-color` |
+| `cool-color` | Cooling trend | `info-color` |
 
-  # Cool color (for trends)
-  cool-color: "#03a9f4"
+## Upgrading from 1.0
 
-  # Standard HA variables also apply
-  primary-color: "#03a9f4"
-  accent-color: "#ff9800"
-```
-
-## Data Requirements
-
-This card works with the [Heating Manager integration](https://github.com/vatons/heating_manager) and expects the following attributes on the climate entity:
-
-**Required:**
-- `current_temperature` - Current room temperature (number)
-- `temperature` - Target temperature (number)
-- `hvac_action` - Current action (heating/idle/off)
-
-**Optional (for boost functionality):**
-- `boost.temperature` - Boost target temperature (null if boost not active)
-- `boost.end_time` - ISO timestamp when boost ends
-- `boost.time_remaining_minutes` - Minutes remaining in boost
-- `boost.active` - Boolean (for zone entities only)
+- Entities: use the Heating Manager 3.x entities (`climate.downstairs_lounge`). Cards no longer guess rooms and zones from entity IDs, so zones named anything work.
+- `heating-manager-ui-editor.js` is gone; the editor is built into `heating-manager-ui.js`. If you added it as a resource, remove it.
+- Boost now uses `heating_manager.set_boost` (one call) instead of setting the preset and then the temperature.
+- Temperatures follow your unit system (°C or °F).
 
 ## Troubleshooting
 
-### Card doesn't appear
-1. Check that you've added the resource to your Lovelace configuration
-2. Clear your browser cache (Ctrl+F5 / Cmd+Shift+R)
-3. Check the browser console for errors (F12)
-4. Verify the entity ID exists and is correct
+**The card says "isn't a Heating Manager entity"**: choose one of the climate entities Heating Manager creates for its rooms and zones, not a TRV.
 
-### Boost button doesn't work
-1. Make sure you're clicking directly on the rocket icon or countdown timer
-2. Check that the Heating Manager integration supports boost for your entity
-3. For zones, boost activation works differently than rooms
-4. Check browser console (F12) for any error messages
+**"Waiting for Heating Manager…"**: the integration is starting and hasn't updated its rooms yet. It clears by itself.
 
-### Countdown timer not updating
-- The countdown updates every second when boost is active
-- If it's stuck, try refreshing the page (F5)
-- Check that the entity's `boost.end_time` attribute is valid
+**Boost is greyed out**: the room has no temperature sensor (add one in the zone's form on the Heating Manager integration page), or away mode is on.
 
-### Card shows "Entity not found"
-- **Most Common Cause**: Heating Manager integration is not installed or configured
-  - Install from: [https://github.com/vatons/heating_manager](https://github.com/vatons/heating_manager)
-  - Verify installation: Go to Settings → Devices & Services, look for "Heating Manager"
-- Verify the entity ID is correct (should match pattern: `climate.<room_id>_hm`)
-- Check that the Heating Manager integration is loaded and running
-- Ensure the entity is available in Developer Tools → States
-
-### Colors don't match my theme
-Make sure you've defined the custom CSS variables in your theme (see Theming section above)
-
-## Compatibility
-
-- **Home Assistant**: 2023.1 or later
-- **Heating Manager Integration**: **REQUIRED** - [Install from GitHub](https://github.com/vatons/heating_manager) (version 1.0.0+)
-- **Browsers**: Chrome, Firefox, Safari, Edge (modern versions)
-- **Mobile**: Fully responsive, works on all devices
+**The card doesn't appear after updating**: reload the browser, clearing its cache if needed. The browser console shows `HEATING-MANAGER-UI v2.0.0` when the new version is loaded.
 
 ## Development
 
-Want to contribute or customize the card? Here's the structure:
+The cards are a single JavaScript module with no build step and no dependencies. There are three test suites:
 
+| Suite | What it checks | Command |
+|---|---|---|
+| Unit | Rendering, buttons, optimistic updates, editors, °C/°F, away, errors (Vitest + happy-dom) | `npm test` |
+| Contract | The real Heating Manager integration on Home Assistant: records the entity states the unit tests use (`test/fixtures/`) and runs every service call the cards make (`test/fixtures/service-calls.json`) | `npm run test:contract` |
+| End to end | Starts Home Assistant with its frontend and Heating Manager, then uses the cards in Chromium: boost, target, on/off, away, more info, the card picker and both editors. Screenshots go to `e2e/screenshots/` | `npm run test:e2e` |
+
+```bash
+npm install
+npm test
+
+# Contract and end-to-end tests need Python 3.14 and a Heating Manager checkout
+# next to this repository (or HM_BACKEND=/path/to/heating_manager)
+uv venv --python 3.14 .venv
+uv pip install --python .venv/bin/python -r contract/requirements.txt
+(cd contract && ../.venv/bin/pytest)
+UPDATE_FIXTURES=1 npm run test:contract   # after an integration change, re-record the fixtures
+
+uv venv --python 3.14 .venv-e2e
+uv pip install --python .venv-e2e/bin/python -r e2e/requirements.txt
+HA_PYTHON=.venv-e2e/bin/python npm run test:e2e
 ```
-heating_manager_ui/
-├── heating-manager-ui.js         # Main card implementation
-├── heating-manager-ui-editor.js  # Visual configuration editor
-├── hacs.json                     # HACS integration metadata
-├── info.md                       # HACS store listing
-├── README.md                     # This file
-├── INSTALL.md                    # Quick installation guide
-├── CHANGELOG.md                  # Version history
-├── example-dashboard.yaml        # Example Lovelace configurations
-└── example-theme.yaml            # Example Home Assistant themes
-```
 
-**Technical Details:**
-- Built as vanilla Web Components (no build step required)
-- Uses Shadow DOM for style encapsulation
-- No external dependencies
-- Compatible with Home Assistant 2023.1+
-- Editor provides visual configuration in HA UI
-
-## Support
-
-For issues, questions, or feature requests:
-- **GitHub Issues**: [Your repository URL]
-- **Home Assistant Community**: [Forum thread URL]
+The end-to-end test uses Home Assistant's default port, 8123. Set `CHROMIUM` to a Chromium binary if Playwright's isn't installed.
 
 ## License
 
-MIT License - See main project LICENSE file for details
-
-## Changelog
-
-### v1.0.0 (2024-10-19)
-- Initial release
-- Large temperature display with current and target
-- Visual heating status indicator with color-changing status bars
-- Boost button with one-click activation
-- Real-time countdown timer for active boosts
-- Zone entity support
-- Tap actions support (more-info, none, call-service)
-- Visual configuration editor
-- Full theme integration with custom CSS variables
-- Optimistic UI updates for boost actions
+MIT. See [LICENSE](LICENSE).

@@ -1,0 +1,19 @@
+{
+  "name": "heating-manager-ui",
+  "version": "2.0.0",
+  "description": "Lovelace cards for the Heating Manager Home Assistant integration",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:contract": "cd contract && ../.venv/bin/pytest",
+    "test:e2e": "node e2e/run.mjs"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "happy-dom": "20.14.4",
+    "playwright-core": "1.56.1",
+    "vitest": "4.1.11"
+  }
+}

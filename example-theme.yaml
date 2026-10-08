@@ -148,6 +148,7 @@ heating-minimal:
 # heating-color-light:   Lighter shade for gradients
 # heating-color-alpha:   Transparent version for backgrounds
 # cool-color:            Color for cooling/falling trends
+# boost-color:           Color for active boost buttons (defaults to heating-color)
 #
 # If not defined, the card falls back to sensible defaults.
 
@@ -157,7 +158,7 @@ heating-minimal:
 # You can also override colors using card-mod (if installed):
 #
 # type: custom:heating-room-card
-# entity: climate.living_room_hm
+# entity: climate.downstairs_lounge
 # card_mod:
 #   style: |
 #     :host {
