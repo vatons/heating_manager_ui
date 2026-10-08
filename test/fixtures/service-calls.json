@@ -1,0 +1,20 @@
+{
+  "_comment": "Every Home Assistant service call the cards make. contract/test_backend_contract.py runs each one against the real Heating Manager integration; the JS tests check that the cards only make calls listed here.",
+  "calls": [
+    { "id": "room_boost_default", "domain": "heating_manager", "service": "set_boost", "data": {}, "target": "room" },
+    { "id": "room_boost", "domain": "heating_manager", "service": "set_boost", "data": { "duration": 60 }, "target": "room" },
+    { "id": "room_boost_temperature", "domain": "heating_manager", "service": "set_boost", "data": { "duration": 30, "temperature": 23 }, "target": "room" },
+    { "id": "room_clear_boost", "domain": "heating_manager", "service": "clear_boost", "data": {}, "target": "room" },
+    { "id": "room_set_temperature", "domain": "climate", "service": "set_temperature", "data": { "temperature": 20.5 }, "target": "room" },
+    { "id": "room_off", "domain": "climate", "service": "set_hvac_mode", "data": { "hvac_mode": "off" }, "target": "room" },
+    { "id": "room_on", "domain": "climate", "service": "set_hvac_mode", "data": { "hvac_mode": "heat" }, "target": "room" },
+    { "id": "room_schedule", "domain": "climate", "service": "set_preset_mode", "data": { "preset_mode": "schedule" }, "target": "room" },
+    { "id": "zone_boost", "domain": "climate", "service": "set_preset_mode", "data": { "preset_mode": "boost" }, "target": "zone" },
+    { "id": "zone_schedule", "domain": "climate", "service": "set_preset_mode", "data": { "preset_mode": "schedule" }, "target": "zone" },
+    { "id": "zone_set_temperature", "domain": "climate", "service": "set_temperature", "data": { "temperature": 21 }, "target": "zone" },
+    { "id": "global_set_temperature", "domain": "climate", "service": "set_temperature", "data": { "temperature": 22 }, "target": "global" },
+    { "id": "global_schedule", "domain": "climate", "service": "set_preset_mode", "data": { "preset_mode": "schedule" }, "target": "global" },
+    { "id": "away_on", "domain": "heating_manager", "service": "set_mode", "data": { "mode": "away" }, "target": null },
+    { "id": "away_off", "domain": "heating_manager", "service": "set_mode", "data": { "mode": "schedule" }, "target": null }
+  ]
+}

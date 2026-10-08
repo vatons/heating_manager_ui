@@ -1,224 +1,114 @@
-# Example Lovelace Dashboard Configuration
-# Copy and paste these examples into your Home Assistant dashboard
+# Example dashboard configurations for the Heating Manager cards.
+# Entity IDs follow Heating Manager 3.x naming: climate.<zone> and climate.<zone>_<room>.
+# Every option here can also be set in the cards' visual editors.
 
 # ================================================================
-# EXAMPLE 1: Single Room Card
+# EXAMPLE 1: A room
 # ================================================================
 type: custom:heating-room-card
-entity: climate.living_room_hm
+entity: climate.downstairs_lounge
 
 # ================================================================
-# EXAMPLE 2: Room Card with Custom Name
+# EXAMPLE 2: A room with a custom name and a 1-hour boost
 # ================================================================
 type: custom:heating-room-card
-entity: climate.living_room_hm
-name: Main Living Area
+entity: climate.upstairs_bedroom
+name: Main bedroom
+boost_duration: 60
 
 # ================================================================
-# EXAMPLE 3: Minimal Card (No ETA or Trend)
+# EXAMPLE 3: Just the temperature and status (no buttons or analytics)
 # ================================================================
 type: custom:heating-room-card
-entity: climate.bedroom_hm
-show_eta: false
-show_trend: false
+entity: climate.downstairs_kitchen
+show_controls: false
+show_analytics: false
 
 # ================================================================
-# EXAMPLE 4: Grid Layout - Multiple Rooms
+# EXAMPLE 4: A zone with all of its rooms
+# ================================================================
+type: custom:heating-zone-card
+entity: climate.downstairs
+
+# ================================================================
+# EXAMPLE 5: A zone with chosen rooms, in this order, and no per-room boost
+# ================================================================
+type: custom:heating-zone-card
+entity: climate.upstairs
+name: Bedrooms
+rooms:
+  - climate.upstairs_main_bedroom
+  - climate.upstairs_guest_bedroom
+show_room_boost: false
+
+# ================================================================
+# EXAMPLE 6: The whole house (heating demand, boost all, away mode)
+# ================================================================
+type: custom:heating-room-card
+entity: climate.heating_manager
+name: Whole house
+
+# ================================================================
+# EXAMPLE 7: A sections view: the house, then one section per zone
+# ================================================================
+title: Heating
+path: heating
+type: sections
+max_columns: 3
+sections:
+  - type: grid
+    cards:
+      - type: heading
+        heading: Home
+      - type: custom:heating-room-card
+        entity: climate.heating_manager
+        grid_options:
+          columns: 12
+  - type: grid
+    cards:
+      - type: custom:heating-zone-card
+        entity: climate.downstairs
+  - type: grid
+    cards:
+      - type: custom:heating-zone-card
+        entity: climate.upstairs
+
+# ================================================================
+# EXAMPLE 8: Room cards in a grid
 # ================================================================
 type: grid
 columns: 2
 square: false
 cards:
   - type: custom:heating-room-card
-    entity: climate.living_room_hm
-    name: Living Room
-
+    entity: climate.downstairs_lounge
   - type: custom:heating-room-card
-    entity: climate.kitchen_hm
-    name: Kitchen
-
+    entity: climate.downstairs_kitchen
   - type: custom:heating-room-card
-    entity: climate.bedroom_hm
-    name: Master Bedroom
-
+    entity: climate.upstairs_bedroom
   - type: custom:heating-room-card
-    entity: climate.office_hm
-    name: Home Office
+    entity: climate.upstairs_office
 
 # ================================================================
-# EXAMPLE 5: Full Home Dashboard (Multi-Zone)
-# ================================================================
-type: vertical-stack
-cards:
-  # Header
-  - type: markdown
-    content: |
-      # 🏠 Home Heating Control
-
-  # Global Controls
-  - type: horizontal-stack
-    cards:
-      - type: button
-        name: Schedule Mode
-        icon: mdi:calendar-clock
-        tap_action:
-          action: call-service
-          service: heating_manager.set_mode
-          service_data:
-            mode: schedule
-
-      - type: button
-        name: Away Mode
-        icon: mdi:home-export-outline
-        tap_action:
-          action: call-service
-          service: heating_manager.set_mode
-          service_data:
-            mode: away
-
-  # Downstairs Zone
-  - type: markdown
-    content: "## 🔽 Downstairs"
-
-  - type: grid
-    columns: 2
-    square: false
-    cards:
-      - type: custom:heating-room-card
-        entity: climate.living_room_hm
-
-      - type: custom:heating-room-card
-        entity: climate.kitchen_hm
-
-      - type: custom:heating-room-card
-        entity: climate.dining_room_hm
-
-      - type: custom:heating-room-card
-        entity: climate.hallway_hm
-
-  # Upstairs Zone
-  - type: markdown
-    content: "## 🔼 Upstairs"
-
-  - type: grid
-    columns: 2
-    square: false
-    cards:
-      - type: custom:heating-room-card
-        entity: climate.bedroom_hm
-
-      - type: custom:heating-room-card
-        entity: climate.office_hm
-
-      - type: custom:heating-room-card
-        entity: climate.bathroom_hm
-
-      - type: custom:heating-room-card
-        entity: climate.guest_room_hm
-
-# ================================================================
-# EXAMPLE 6: Compact Mobile View
-# ================================================================
-type: vertical-stack
-cards:
-  - type: custom:heating-room-card
-    entity: climate.living_room_hm
-    show_trend: false
-
-  - type: custom:heating-room-card
-    entity: climate.bedroom_hm
-    show_trend: false
-
-  - type: custom:heating-room-card
-    entity: climate.kitchen_hm
-    show_trend: false
-
-# ================================================================
-# EXAMPLE 7: With Quick Boost Buttons
-# ================================================================
-type: vertical-stack
-cards:
-  - type: custom:heating-room-card
-    entity: climate.living_room_hm
-
-  - type: horizontal-stack
-    cards:
-      - type: button
-        name: +1°C for 30m
-        icon: mdi:thermometer-plus
-        tap_action:
-          action: call-service
-          service: heating_manager.set_boost
-          service_data:
-            zone_id: downstairs
-            room_id: living_room
-            duration: 30
-
-      - type: button
-        name: +2°C for 60m
-        icon: mdi:thermometer-high
-        tap_action:
-          action: call-service
-          service: heating_manager.set_boost
-          service_data:
-            zone_id: downstairs
-            room_id: living_room
-            duration: 60
-            temperature: 22
-
-      - type: button
-        name: Clear Boost
-        icon: mdi:close-circle
-        tap_action:
-          action: call-service
-          service: heating_manager.clear_boost
-          service_data:
-            zone_id: downstairs
-            room_id: living_room
-
-# ================================================================
-# EXAMPLE 8: Master Bedroom with Tap to Boost
+# EXAMPLE 9: Tap for the zone's dashboard, hold for details
 # ================================================================
 type: custom:heating-room-card
-entity: climate.bedroom_hm
-name: Master Bedroom
+entity: climate.downstairs
 tap_action:
-  action: call-service
-  service: heating_manager.set_boost
-  service_data:
-    zone_id: upstairs
-    room_id: bedroom
-    duration: 60
-    temperature: 21
+  action: navigate
+  navigation_path: /lovelace/downstairs
+hold_action:
+  action: more-info
 
 # ================================================================
-# EXAMPLE 9: Zone Overview Card
-# ================================================================
-type: vertical-stack
-cards:
-  # Zone Climate Entity
-  - type: thermostat
-    entity: climate.downstairs_zone_hm
-
-  # Individual Rooms
-  - type: grid
-    columns: 2
-    square: false
-    cards:
-      - type: custom:heating-room-card
-        entity: climate.living_room_hm
-
-      - type: custom:heating-room-card
-        entity: climate.kitchen_hm
-
-# ================================================================
-# EXAMPLE 10: Conditional Card (Only Show When Heating)
+# EXAMPLE 10: Show a room only while it's heating
 # ================================================================
 type: conditional
 conditions:
-  - entity: climate.living_room_hm
-    state_not: idle
+  - condition: state
+    entity: climate.downstairs_lounge
+    attribute: hvac_action
+    state: heating
 card:
   type: custom:heating-room-card
-  entity: climate.living_room_hm
-  name: 🔥 Living Room (Currently Heating)
+  entity: climate.downstairs_lounge

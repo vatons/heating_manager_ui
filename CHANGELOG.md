@@ -1,9 +1,41 @@
 # Changelog
 
-All notable changes to the Heating Room Card will be documented in this file.
+All notable changes to the Heating Manager cards (formerly Heating Room Card) will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [2.0.0] - 2026-10-08
+
+Rewritten for Heating Manager 3.2 and Home Assistant 2026.10.
+
+### Added
+- **Heating Manager zone** card (`custom:heating-zone-card`): a zone with all of its rooms, found automatically, each with its status and a boost button. Pick and order rooms with `rooms`.
+- Target − / + buttons. Taps are combined into one change, sent a second after the last tap.
+- **Resume schedule** after a manual temperature, **Turn off / Turn on** for rooms, **Boost all / Cancel boosts** for zones and the whole house, and **Away** on the whole-house card.
+- Status line: schedule (`Schedule until 17:00`), manual temperature, boost countdown with its target, away and off; the next schedule change; trend; time to target; sensors that stopped reporting.
+- Monitoring-only zones and boiler protection holds (`Heating (min on)`, `Waiting (min off)`).
+- °F support: the integration's own attributes (boost, schedule, manual temperatures) are converted to your unit system.
+- Visual editors built on Home Assistant's form, limited to Heating Manager entities, with a hint about what the chosen entity shows. The card picker previews your own rooms and zones.
+- `boost_duration`, `show_controls`, `show_schedule`, `show_analytics`, `show_room_boost`, `hold_action` options.
+- Sizes for sections views (`getGridOptions`), keyboard access, and clear messages for missing, unavailable or non-Heating Manager entities.
+- Tests: unit tests (Vitest), contract tests against the real integration, and end-to-end tests in Home Assistant 2026.10 with Chromium.
+
+### Changed
+- Rooms, zones and the whole house are recognised by their attributes, not by `_hm` / `_zone` in the entity ID.
+- Boost uses `heating_manager.set_boost` / `clear_boost` (one call, the integration's default temperature and duration).
+- Changes show at once and stay until the entity confirms them (Heating Manager refreshes at most every 10 seconds), or go back with a message if Home Assistant rejects them.
+- Tap actions use Home Assistant's standard action handling (`hass-action`), so every action type works.
+- Card names: "Heating Manager room" and "Heating Manager zone". Room names are shown without their zone.
+
+### Removed
+- `heating-manager-ui-editor.js`: the editor is part of `heating-manager-ui.js`. Remove it from your resources if you added it.
+- Support for Heating Manager 1.x and 2.x entities. Use version 1.0 of the cards with them.
+
+### Fixed
+- The visual editor didn't work (it was never loaded, and its template syntax needs Lit).
+- Temperature trends were never shown: the integration reports `heating_rapidly`, `cooling_slowly` and so on.
+- Names are escaped.
 
 ## [1.0.0] - 2024-10-19
 
@@ -64,99 +96,3 @@ Works with Heating Manager integration climate entities that provide:
 - `heating_analytics.temperature_trend` (optional)
 - `boost.temperature` (optional)
 - `boost.time_remaining_minutes` (optional)
-
-## [Unreleased]
-
-### Planned Features
-- Multi-language support (i18n)
-- Customizable units (°C/°F)
-- Graph view option (temperature over time)
-- Compact mode for smaller displays
-- Advanced animations (temperature change visualization)
-- Custom icon support
-- More tap action options (hold, double-tap)
-- Card templates/presets
-- HACS integration
-
-### Under Consideration
-- Weekly/monthly heating statistics
-- Energy consumption display (if available)
-- Predictive ETA improvements
-- Voice control indicators
-- Schedule visualization
-- Zone grouping support
-- Drag-to-set temperature
-- Color gradients based on temperature delta
-
-## Future Versions
-
-### [1.1.0] - Planned
-- Multi-language support
-- °F unit support
-- Compact display mode
-- Additional tap actions (hold, double-tap)
-
-### [1.2.0] - Planned
-- Temperature history graph
-- Energy consumption display
-- Advanced animations
-- Custom icons
-
-### [2.0.0] - Future
-- Complete redesign with more layout options
-- Schedule timeline visualization
-- Advanced statistics and analytics
-- Mobile app integration
-
-## Version History
-
-- **v1.0.0** (2024-10-19) - Initial release
-
----
-
-## How to Update
-
-### Updating from Future Versions
-
-When a new version is released:
-
-1. **Download new files:**
-   - Download updated `heating-room-card.js`
-   - Download updated `heating-room-card-editor.js` (if changed)
-
-2. **Replace old files:**
-   - Replace files in `/config/www/heating-room-card/`
-
-3. **Clear cache:**
-   - Method 1: Hard refresh browser (Ctrl+F5)
-   - Method 2: Add version to resource URL:
-     ```
-     /local/heating-room-card/heating-room-card.js?v=1.1.0
-     ```
-
-4. **Check changelog:**
-   - Review breaking changes
-   - Update configuration if needed
-   - Test card functionality
-
-5. **Verify installation:**
-   - Check browser console for version number
-   - Confirm all features work as expected
-
-### Breaking Changes
-
-This section will list any breaking changes in future versions that require configuration updates.
-
-**v1.0.0:** No breaking changes (initial release)
-
----
-
-## Support
-
-Report issues or request features:
-- GitHub Issues: [Your repository URL]
-- Home Assistant Community: [Forum thread URL]
-
-## License
-
-MIT License - See LICENSE file for details
