@@ -42,7 +42,7 @@ describe('room card editor', () => {
     ]);
     expect(form.data).toEqual({ entity: ROOM, show_controls: true, show_schedule: true, show_analytics: true });
     expect(form.computeLabel({ name: 'boost_duration' })).toBe('Boost length (minutes)');
-    expect(form.computeHelper({ name: 'boost_duration' })).toMatch(/integration's boost duration/);
+    expect(form.computeHelper({ name: 'boost_duration' })).toMatch(/room's own boost duration/);
   });
 
   it('keeps the YAML tidy: no defaults or empty values', () => {
@@ -96,7 +96,8 @@ describe('zone card editor', () => {
 
   it('saves the chosen rooms', () => {
     const { form, events } = editor('heating-zone-card-editor', { entity: ZONE });
-    change(form, { entity: ZONE, rooms: [STUDY, ROOM], show_room_boost: false });
-    expect(events).toEqual([{ entity: ZONE, rooms: [STUDY, ROOM], show_room_boost: false }]);
+    change(form, { entity: ZONE, rooms: [STUDY, ROOM], show_controls: false });
+    expect(names(form.schema)).toEqual(['entity', 'name', 'rooms', 'show_controls', 'tap_action']);
+    expect(events).toEqual([{ entity: ZONE, rooms: [STUDY, ROOM], show_controls: false }]);
   });
 });

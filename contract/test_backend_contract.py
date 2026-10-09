@@ -179,11 +179,19 @@ def snapshot(hass: HomeAssistant, scenario: str) -> dict:
     }
 
 
-def check_fixture(name: str, data: dict) -> None:
-    path = FIXTURES / f"{name}.json"
+def check_fixture(scenario: str, data: dict) -> None:
+    """Compare with the snapshot recorded from this version of the integration.
+
+    The JS tests use the recorded snapshots. Against another version (e.g. the
+    integration's main branch) there's no snapshot to compare with, so only the
+    assertions in each test apply; UPDATE_FIXTURES=1 records one.
+    """
+    path = FIXTURES / f"v{data['heating_manager']}-{scenario}.json"
     text = json.dumps(data, indent=2, sort_keys=False) + "\n"
-    if UPDATE or not path.exists():
+    if UPDATE:
         path.write_text(text)
+        return
+    if not path.exists():
         return
     recorded = json.loads(path.read_text())
     assert recorded == json.loads(text), (
@@ -211,7 +219,7 @@ async def test_states_celsius(hass: HomeAssistant, heating):
     assert data["states"][ROOM_OFF]["state"] == "off"
     assert data["states"][ZONE]["attributes"]["schedule"]["current_period"]["start"] == "09:00"
     assert data["states"][GLOBAL]["attributes"]["total_zones"] == 2
-    check_fixture("v3.2.0-celsius", data)
+    check_fixture("celsius", data)
 
 
 async def test_states_fahrenheit(hass: HomeAssistant, heating):
@@ -224,7 +232,7 @@ async def test_states_fahrenheit(hass: HomeAssistant, heating):
     assert room["temperature"] > 50
     # ... but the integration's own attributes stay in °C
     assert room["boost"]["temperature"] < 30
-    check_fixture("v3.2.0-fahrenheit", data)
+    check_fixture("fahrenheit", data)
 
 
 async def test_states_away(hass: HomeAssistant, heating):
@@ -232,7 +240,7 @@ async def test_states_away(hass: HomeAssistant, heating):
     await call(hass, "heating_manager", "set_mode", {"mode": "away"}, None)
     data = snapshot(hass, "Away mode")
     assert data["states"][GLOBAL]["attributes"]["preset_mode"] == "away"
-    check_fixture("v3.2.0-away", data)
+    check_fixture("away", data)
 
 
 # ---------------------------------------------------------------------------
@@ -256,41 +264,27 @@ EXPECT = {
     "room_boost_temperature": lambda hass: attrs(hass, ROOM)["boost"]["temperature"] == 23
     and attrs(hass, ROOM)["temperature"] == 23,
     "room_clear_boost": lambda hass: attrs(hass, ROOM)["boost"]["temperature"] is None,
-    "room_set_temperature": lambda hass: attrs(hass, ROOM)["temperature"] == 20.5
-    and attrs(hass, ROOM)["manual_override"] == {"active": True, "temperature": 20.5},
-    "room_off": lambda hass: hass.states.get(ROOM).state == "off"
-    and attrs(hass, ROOM)["hvac_action"] == "off",
-    "room_on": lambda hass: hass.states.get(ROOM).state == "heat",
-    "room_schedule": lambda hass: attrs(hass, ROOM)["preset_mode"] == "schedule"
-    and not attrs(hass, ROOM)["manual_override"]["active"]
-    and attrs(hass, ROOM)["boost"]["temperature"] is None,
     "zone_boost": lambda hass: attrs(hass, ZONE)["boost"]["active"]
     # Only rooms with sensors can be boosted
     and sorted(attrs(hass, ZONE)["boost"]["room_ids"]) == ["kitchen", "lounge", "study"],
     "zone_schedule": lambda hass: attrs(hass, ZONE)["preset_mode"] == "schedule"
     and not attrs(hass, ZONE)["boost"]["active"]
     and not attrs(hass, ZONE)["manual_override"]["active"],
-    "zone_set_temperature": lambda hass: attrs(hass, ZONE)["manual_override"]
-    == {"active": True, "temperature": 21},
-    "global_set_temperature": lambda hass: attrs(hass, GLOBAL)["manual_override"]["zones"]
-    == ["downstairs", "upstairs"],
     "global_schedule": lambda hass: attrs(hass, GLOBAL)["preset_mode"] == "schedule"
     and not attrs(hass, GLOBAL)["boost"]["active"],
-    "away_on": lambda hass: attrs(hass, GLOBAL)["away_mode"] and attrs(hass, ROOM)["preset_mode"] == "away",
-    "away_off": lambda hass: not attrs(hass, GLOBAL)["away_mode"],
+    "global_boost": lambda hass: attrs(hass, GLOBAL)["boost"]["active"]
+    and sorted(attrs(hass, GLOBAL)["boost"]["room_ids"])
+    == ["downstairs/kitchen", "downstairs/lounge", "downstairs/study", "upstairs/bathroom"],
 }
 
 # Calls that only show their effect from a starting state
 SETUP = {
     "room_clear_boost": [("heating_manager", "set_boost", {}, ROOM)],
-    "room_on": [("climate", "set_hvac_mode", {"hvac_mode": "off"}, ROOM)],
-    "room_schedule": [("climate", "set_temperature", {"temperature": 23}, ROOM)],
     "zone_schedule": [
         ("climate", "set_preset_mode", {"preset_mode": "boost"}, ZONE),
         ("climate", "set_temperature", {"temperature": 22}, ZONE),
     ],
     "global_schedule": [("climate", "set_preset_mode", {"preset_mode": "boost"}, GLOBAL)],
-    "away_off": [("heating_manager", "set_mode", {"mode": "away"}, None)],
 }
 
 
@@ -325,3 +319,31 @@ async def test_room_without_sensors_cannot_be_boosted(hass: HomeAssistant, heati
     assert hall["sensors"] == []
     with pytest.raises(Exception):
         await call(hass, "heating_manager", "set_boost", {}, "climate.downstairs_hall")
+
+
+# ---------------------------------------------------------------------------
+# 3. What the cards leave to Home Assistant's more-info dialog
+# ---------------------------------------------------------------------------
+
+def _version() -> tuple[int, ...]:
+    manifest = json.loads((BACKEND / "custom_components" / "heating_manager" / "manifest.json").read_text())
+    return tuple(int(part) for part in manifest["version"].split("."))
+
+
+@pytest.mark.skipif(_version() < (3, 4), reason='the "manual" preset is new in Heating Manager 3.4')
+async def test_dialog_clears_a_manual_temperature(hass: HomeAssistant, heating):
+    """The cards have no Resume schedule button: the dialog's Preset → Schedule does it."""
+    await heating()
+    await call(hass, "climate", "set_temperature", {"temperature": 21}, ROOM)
+    assert attrs(hass, ROOM)["preset_mode"] == "manual"  # so Schedule can be chosen
+    await call(hass, "climate", "set_preset_mode", {"preset_mode": "schedule"}, ROOM)
+    assert attrs(hass, ROOM)["preset_mode"] == "schedule"
+    assert not attrs(hass, ROOM)["manual_override"]["active"]
+
+
+@pytest.mark.skipif(_version() < (3, 4), reason="switching off ends a boost from Heating Manager 3.4")
+async def test_dialog_switching_a_boosted_room_off_ends_the_boost(hass: HomeAssistant, heating):
+    await heating()
+    await call(hass, "heating_manager", "set_boost", {}, ROOM)
+    await call(hass, "climate", "set_hvac_mode", {"hvac_mode": "off"}, ROOM)
+    assert attrs(hass, ROOM)["boost"]["temperature"] is None

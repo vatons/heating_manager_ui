@@ -64,33 +64,19 @@ describe('zone card', () => {
     expect(rows(el).map((r) => r.name)).toEqual(['Conservatory', 'Hall', 'Kitchen', 'Lounge', 'Study']);
   });
 
-  it('boosts a single room from its row', () => {
-    const hass = makeHass();
-    const el = mount(TAG, { entity: ZONE, boost_duration: 20 }, hass);
-    const events = captureEvents(el, 'hass-action', 'hass-more-info');
-    click(button(el, 'room-boost', KITCHEN));
-    expect(hass.callService).toHaveBeenCalledWith('heating_manager', 'set_boost', { duration: 20 }, { entity_id: KITCHEN }, false);
-    expect(events).toEqual([]);
-    expect(button(el, 'room-boost', KITCHEN).getAttribute('aria-pressed')).toBe('true');
-    expect(rows(el)[1].status).toBe('Boost · 20:00 left');
-
-    click(button(el, 'room-boost', ROOM));
-    expect(hass.callService).toHaveBeenLastCalledWith('heating_manager', 'clear_boost', {}, { entity_id: ROOM }, false);
-  });
-
-  it("can't boost rooms without sensors", () => {
+  it('rooms have no buttons: a tap opens their details', () => {
     const el = mount(TAG, { entity: ZONE }, makeHass());
-    expect(button(el, 'room-boost', HALL).disabled).toBe(true);
+    expect($$(el, '.row button')).toEqual([]);
+    expect($$(el, '[data-action]').map((b) => b.dataset.action)).toEqual(['boost']);
+    expect(text($(el, '.hint'))).toBe('Tap a room, or the zone, for its target, heat/off and schedule');
   });
 
-  it('undoes a failed room boost', async () => {
-    const hass = makeHass('v3.2.0-celsius', { callService: vi.fn(async () => { throw new Error('nope'); }) });
+  it('shows an off room as off, even if its boost hasn’t ended (Heating Manager before 3.4)', () => {
+    const hass = withState(makeHass(), STUDY, {
+      attributes: { boost: { temperature: 21, end_time: '2026-01-14T20:30:00+00:00', duration_minutes: 30, time_remaining_minutes: 30 } },
+    });
     const el = mount(TAG, { entity: ZONE }, hass);
-    const events = captureEvents(el, 'hass-notification');
-    click(button(el, 'room-boost', KITCHEN));
-    await flush();
-    expect(button(el, 'room-boost', KITCHEN).getAttribute('aria-pressed')).toBe('false');
-    expect(events[0].detail.message).toBe("Couldn't boost Kitchen: nope");
+    expect(rows(el)[3]).toMatchObject({ name: 'Study', status: 'Off' });
   });
 
   it('opens a room’s details from its row', () => {
@@ -111,10 +97,7 @@ describe('zone card', () => {
     expect(text(button(el, 'boost'))).toBe('Boost all');
   });
 
-  it('hides boost buttons when asked', () => {
-    const el = mount(TAG, { entity: ZONE, show_room_boost: false }, makeHass());
-    expect($(el, '[data-action="room-boost"]')).toBeNull();
-    expect(button(el, 'boost')).not.toBeNull();
+  it('hides Boost all when asked', () => {
     const bare = mount(TAG, { entity: ZONE, show_controls: false }, makeHass());
     expect($(bare, 'button')).toBeNull();
   });
@@ -129,7 +112,6 @@ describe('zone card', () => {
     const el = mount(TAG, { entity: ZONE }, makeHass('v3.2.0-away'));
     expect(text($(el, '.title .sub:not([style])'))).toContain('Away · frost protection');
     expect(button(el, 'boost')).toBeNull();
-    expect(button(el, 'room-boost', KITCHEN).disabled).toBe(true);
   });
 
   it('in away mode with a boost still running', () => {
@@ -139,8 +121,6 @@ describe('zone card', () => {
     hass = withState(hass, ZONE, { attributes: { boost: { active: true, room_ids: ['lounge'] } } });
     const el = mount(TAG, { entity: ZONE }, hass);
     expect(rows(el)[2].status).toBe('Away');
-    expect(button(el, 'room-boost', ROOM).disabled).toBe(false);
-    expect(button(el, 'room-boost', KITCHEN).disabled).toBe(true);
     expect(text(button(el, 'boost'))).toBe('Cancel boosts');
   });
 
@@ -156,8 +136,8 @@ describe('zone card', () => {
     });
     const el = mount(TAG, { entity: ZONE }, hass);
     expect(text($(el, '.title .sub:not([style])'))).toContain('Manual 21.0°C');
-    click(button(el, 'schedule'));
-    expect(hass.callService).toHaveBeenCalledWith('climate', 'set_preset_mode', { preset_mode: 'schedule' }, { entity_id: ZONE }, false);
+    // Cleared from the zone's dialog (Preset: Schedule)
+    expect(button(el, 'schedule')).toBeNull();
   });
 
   it('needs a zone', () => {

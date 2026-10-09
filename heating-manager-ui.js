@@ -4,22 +4,22 @@
  * Lovelace cards for the Heating Manager integration (v3.2+):
  *
  *   custom:heating-room-card  One room, zone or the whole house: temperature,
- *                             target (+/-), boost, on/off, schedule and status.
+ *                             target, status, schedule and a Boost button.
  *   custom:heating-zone-card  A zone and all of its rooms, found automatically.
  *
- * Plain web components with no build step and no dependencies. Both cards have
- * a visual editor built on Home Assistant's own form (ha-form).
+ * The cards show what's going on and offer the one-tap action, Boost. Everything
+ * else (target, heat/off, schedule, away) is in Home Assistant's own more-info
+ * dialog, a tap away. Plain web components with no build step and no
+ * dependencies; both cards have a visual editor built on ha-form.
  */
 
-export const VERSION = '2.0.0';
+export const VERSION = '2.1.0';
 export const DOMAIN = 'heating_manager';
 
 // How long an optimistic change is shown before trusting the entity again. The
 // integration refreshes at most once every 10 s, so a second action within that
 // time can take up to 10 s to show in the entity's state.
 export const OPTIMISTIC_TIMEOUT_MS = 15000;
-// Pause after the last +/- tap before the new target is sent.
-export const TARGET_DEBOUNCE_MS = 1000;
 const HOLD_MS = 500;
 
 // ---------------------------------------------------------------------------
@@ -321,6 +321,19 @@ export function heatingChip(view) {
   return { label: 'Idle', level: 'idle', icon: 'mdi:fire-off' };
 }
 
+/**
+ * The room's boost duration in minutes, from its boost duration entity
+ * (Heating Manager 3.3+, on the room's device), or null.
+ */
+export function roomBoostDuration(hass, entityId) {
+  const deviceId = hass?.entities?.[entityId]?.device_id;
+  if (!deviceId) return null;
+  const entry = Object.values(hass.entities).find((e) => e.device_id === deviceId
+    && e.platform === DOMAIN && e.translation_key === 'boost_duration');
+  const minutes = Number(hass.states?.[entry?.entity_id]?.state);
+  return entry && Number.isFinite(minutes) && minutes > 0 ? minutes : null;
+}
+
 /** Fire a Home Assistant frontend event (more-info, toast, action ...). */
 function fireEvent(node, type, detail = {}) {
   const event = new Event(type, { bubbles: true, composed: true, cancelable: false });
@@ -380,13 +393,7 @@ const STYLES = `
   .target-value { min-width: 64px; text-align: center; }
   .target-value .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--secondary-text-color); }
   .target-value .value { font-size: 20px; font-weight: 500; color: var(--primary-text-color); }
-  .target-value.pending .value { color: var(--primary-color); }
   button { font: inherit; color: inherit; }
-  .round { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--divider-color, rgba(127,127,127,0.3));
-    background: transparent; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
-    color: var(--primary-text-color); padding: 0; }
-  .round:hover:not([disabled]) { background: var(--secondary-background-color, rgba(127,127,127,0.12)); }
-  .round[disabled] { opacity: 0.35; cursor: default; }
   .status { font-size: 13px; color: var(--secondary-text-color); min-height: 18px; }
   .info { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 12px; color: var(--secondary-text-color); margin-top: 6px; }
   .info span { display: inline-flex; align-items: center; gap: 4px; }
@@ -403,7 +410,7 @@ const STYLES = `
   .action[disabled] { opacity: 0.4; cursor: default; }
   .action.on { background: var(--hm-boost); border-color: var(--hm-boost); color: var(--text-primary-color, #fff); }
   .action.busy { opacity: 0.7; }
-  .round:focus-visible, .action:focus-visible, .row:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+  .action:focus-visible, .row:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
   .warning { padding: 16px; color: var(--primary-text-color); display: flex; gap: 12px; align-items: flex-start; }
   .warning ha-icon { color: var(--hm-warn); flex-shrink: 0; }
   .warning code { font-size: 12px; }
@@ -418,9 +425,8 @@ const STYLES = `
   .row .rstatus { font-size: 12px; color: var(--secondary-text-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .row .temps { text-align: right; font-size: 14px; color: var(--primary-text-color); white-space: nowrap; }
   .row .temps .t { font-size: 12px; color: var(--secondary-text-color); }
-  .row .mini { width: 32px; height: 32px; }
-  .row .mini.on { background: var(--hm-boost); border-color: var(--hm-boost); color: var(--text-primary-color, #fff); }
   .empty { padding: 12px 4px; color: var(--secondary-text-color); font-size: 13px; }
+  .hint { margin-top: 10px; font-size: 12px; color: var(--secondary-text-color); }
 `;
 
 // ---------------------------------------------------------------------------
@@ -509,8 +515,8 @@ class HeatingBaseCard extends HTMLElement {
   }
 
   /** Boost length for countdowns before the entity reports its end time. */
-  _boostMinutes() {
-    return Number(this._config.boost_duration) || 30;
+  _boostMinutes(entityId = this._config.entity) {
+    return Number(this._config.boost_duration) || roomBoostDuration(this._hass, entityId) || 30;
   }
 
   // -- Service calls -------------------------------------------------------
@@ -742,11 +748,6 @@ export class HeatingRoomCard extends HeatingBaseCard {
     } else {
       view.boost.active = this._resolve('boost', view.boost.active);
     }
-    if (view.kind === 'global') view.away = this._resolve('away', view.away);
-    view.override.active = this._resolve('override', view.override.active);
-    const target = this._resolve('target', view.target, (a, b) => a !== null && Math.abs(a - b) < 0.01);
-    view.targetPending = target !== view.target;
-    view.target = target;
     // Countdowns are drawn live from the end time; seconds left would re-render every second
     view.boost.endMs = view.kind === 'room' && view.boost.active && view.boost.endTime
       ? new Date(view.boost.endTime).getTime() : null;
@@ -761,9 +762,6 @@ export class HeatingRoomCard extends HeatingBaseCard {
     const unit = view.unit;
     const chip = heatingChip(view);
     const controls = config.show_controls !== false;
-    const canSetTarget = !view.off && !view.away && !view.unavailable;
-    const stepDown = view.target !== null && view.target - view.step >= view.min - 1e-9;
-    const stepUp = view.target !== null && view.target + view.step <= view.max + 1e-9;
 
     // Away and off win over a boost (the integration targets frost protection / minimum)
     const showBoost = view.kind === 'room' && view.boost.active && !view.away && !view.off;
@@ -806,43 +804,23 @@ export class HeatingRoomCard extends HeatingBaseCard {
     if (controls && !view.unavailable) {
       if (view.kind === 'room') {
         const boostTitle = !view.canBoost ? 'Boost needs a temperature sensor in this room'
-          : view.boost.active ? 'Cancel boost' : `Boost for ${formatDuration(Number(config.boost_duration) || null) || 'the default time'}`;
+          : view.boost.active ? 'Cancel boost' : `Boost for ${formatDuration(this._boostMinutes())}`;
         actions.push(`<button class="action ${view.boost.active ? 'on' : ''} ${busy.boost ? 'busy' : ''}" data-action="boost"
           ${(!view.boost.active && (!view.canBoost || view.away)) || busy.boost ? 'disabled' : ''} title="${boostTitle}" aria-label="${boostTitle}" aria-pressed="${view.boost.active}">
           <ha-icon icon="mdi:rocket-launch"></ha-icon>${view.boost.active ? 'Cancel boost' : 'Boost'}</button>`);
-        if (view.override.active && !view.boost.active) {
-          actions.push(`<button class="action" data-action="schedule" ${busy.schedule ? 'disabled' : ''} title="Go back to the schedule">
-            <ha-icon icon="mdi:calendar-sync"></ha-icon>Resume schedule</button>`);
-        }
-        const offTitle = view.off ? 'Turn this room back on' : 'Turn this room off (TRVs held at minimum)';
-        actions.push(`<button class="action" data-action="power" ${busy.power || view.away ? 'disabled' : ''} title="${offTitle}" aria-label="${offTitle}">
-          <ha-icon icon="mdi:power"></ha-icon>${view.off ? 'Turn on' : 'Turn off'}</button>`);
       } else {
         const label = view.boost.active ? 'Cancel boosts' : 'Boost all';
         const title = view.boost.active ? 'Cancel every boost and manual temperature' : 'Boost every room with a sensor';
         actions.push(`<button class="action ${view.boost.active ? 'on' : ''}" data-action="boost" ${busy.boost || (view.away && !view.boost.active) ? 'disabled' : ''}
           title="${title}" aria-pressed="${view.boost.active}"><ha-icon icon="mdi:rocket-launch"></ha-icon>${label}</button>`);
-        if (view.override.active && !view.boost.active) {
-          actions.push(`<button class="action" data-action="schedule" ${busy.schedule ? 'disabled' : ''}>
-            <ha-icon icon="mdi:calendar-sync"></ha-icon>Resume schedule</button>`);
-        }
-        if (view.kind === 'global') {
-          const title2 = view.away ? 'Go back to the schedules' : 'Frost protection in every zone';
-          actions.push(`<button class="action ${view.away ? 'on' : ''}" data-action="away" ${busy.away ? 'disabled' : ''}
-            title="${title2}" aria-pressed="${view.away}"><ha-icon icon="mdi:home-export-outline"></ha-icon>${view.away ? 'Away · end' : 'Away'}</button>`);
-        }
       }
     }
 
-    const target = controls && canSetTarget
-      ? `<div class="target">
-          <button class="round" data-action="down" ${stepDown ? '' : 'disabled'} aria-label="Lower target" title="Lower target"><ha-icon icon="mdi:minus"></ha-icon></button>
-          <div class="target-value ${view.targetPending ? 'pending' : ''}"><div class="label">Target</div>
-            <div class="value" aria-live="polite">${formatTemp(view.target, unit, { withUnit: true })}</div></div>
-          <button class="round" data-action="up" ${stepUp ? '' : 'disabled'} aria-label="Raise target" title="Raise target"><ha-icon icon="mdi:plus"></ha-icon></button>
-        </div>`
-      : `<div class="target"><div class="target-value"><div class="label">Target</div>
-          <div class="value">${view.off ? 'Off' : formatTemp(view.target, unit, { withUnit: true })}</div></div></div>`;
+    const target = `<div class="target"><div class="target-value"><div class="label">Target</div>
+      <div class="value">${view.off ? 'Off' : formatTemp(view.target, unit, { withUnit: true })}</div></div></div>`;
+    // The rest (target, heat/off, schedule, away) is in the more-info dialog a tap opens
+    const hint = (config.tap_action?.action ?? 'more-info') === 'more-info' && !view.unavailable
+      ? `<div class="hint">${HINTS[view.kind]}</div>` : '';
 
     return `
       <ha-card class="${view.unavailable ? 'unavailable' : ''}">
@@ -862,51 +840,13 @@ export class HeatingRoomCard extends HeatingBaseCard {
           <div class="status">${status}</div>
           ${info.length ? `<div class="info">${info.join('')}</div>` : ''}
           ${actions.length ? `<div class="actions">${actions.join('')}</div>` : ''}
+          ${hint}
         </div>
       </ha-card>`;
   }
 
   _onButton(action) {
-    const stateObj = this._stateObj;
-    if (!stateObj) return;
-    const view = this._model().view;
-    switch (action) {
-      case 'up':
-      case 'down':
-        this._stepTarget(view, action === 'up' ? 1 : -1);
-        break;
-      case 'boost':
-        this._toggleBoost(view);
-        break;
-      case 'power':
-        this._togglePower(view);
-        break;
-      case 'schedule':
-        this._resumeSchedule(view);
-        break;
-      case 'away':
-        this._toggleAway(view);
-        break;
-      default:
-    }
-  }
-
-  _stepTarget(view, direction) {
-    if (view.target === null) return;
-    const step = view.step;
-    let next = Math.round((view.target + direction * step) / step) * step;
-    next = Math.min(view.max, Math.max(view.min, Number(next.toFixed(2))));
-    this._setOptimistic('target', next);
-    this._update();
-    clearTimeout(this._timers.target);
-    this._timers.target = setTimeout(async () => {
-      const ok = await this._call(`set ${view.name} to ${formatTemp(next, view.unit, { withUnit: true })}`,
-        'climate', 'set_temperature', { temperature: next });
-      if (!ok) {
-        this._clearOptimistic('target');
-        this._update();
-      }
-    }, TARGET_DEBOUNCE_MS);
+    if (action === 'boost' && this._stateObj) this._toggleBoost(this._model().view);
   }
 
   async _toggleBoost(view) {
@@ -937,43 +877,14 @@ export class HeatingRoomCard extends HeatingBaseCard {
     }
   }
 
-  async _togglePower(view) {
-    const off = !view.off;
-    this._setOptimistic('off', off);
-    this._update();
-    const ok = await this._call(`turn ${view.name} ${off ? 'off' : 'on'}`, 'climate', 'set_hvac_mode',
-      { hvac_mode: off ? 'off' : 'heat' }, undefined, 'power');
-    if (!ok) {
-      this._clearOptimistic('off');
-      this._update();
-    }
-  }
-
-  async _resumeSchedule(view) {
-    this._setOptimistic('override', false);
-    clearTimeout(this._timers.target);
-    this._clearOptimistic('target');
-    this._update();
-    const ok = await this._call(`resume the schedule in ${view.name}`, 'climate', 'set_preset_mode',
-      { preset_mode: 'schedule' }, undefined, 'schedule');
-    if (!ok) {
-      this._clearOptimistic('override');
-      this._update();
-    }
-  }
-
-  async _toggleAway(view) {
-    const away = !view.away;
-    this._setOptimistic('away', away);
-    this._update();
-    const ok = await this._call(away ? 'turn on away mode' : 'turn off away mode', DOMAIN, 'set_mode',
-      { mode: away ? 'away' : 'schedule' }, null, 'away');
-    if (!ok) {
-      this._clearOptimistic('away');
-      this._update();
-    }
-  }
 }
+
+// Short enough for one line on a narrow card
+const HINTS = {
+  room: 'Tap for more controls',
+  zone: 'Tap for more controls',
+  global: 'Tap for away mode & more',
+};
 
 function zoneSummary(view) {
   const parts = [];
@@ -997,7 +908,7 @@ function globalSummary(view) {
 
 export class HeatingZoneCard extends HeatingBaseCard {
   static get defaults() {
-    return { show_room_boost: true, show_controls: true };
+    return { show_controls: true };
   }
 
   static getConfigElement() {
@@ -1026,12 +937,8 @@ export class HeatingZoneCard extends HeatingBaseCard {
     zone.boost.active = this._resolve('boost', zone.boost.active);
     const rooms = roomsOfZone(this._hass, stateObj.attributes.zone_id, this._config.rooms).map((s) => {
       const view = describe(this._hass, s);
-      const key = `boost:${s.entity_id}`;
-      const boost = this._resolve(key, view.boost.active);
-      let endMs = view.boost.endTime ? new Date(view.boost.endTime).getTime() : null;
-      if (boost !== view.boost.active) {
-        endMs = boost ? this._optimistic[key].since + this._boostMinutes() * 60000 : null;
-      }
+      const boost = view.boost.active;
+      const endMs = view.boost.endTime ? new Date(view.boost.endTime).getTime() : null;
       return {
         entity: s.entity_id,
         name: view.name,
@@ -1042,7 +949,6 @@ export class HeatingZoneCard extends HeatingBaseCard {
         away: view.away,
         unavailable: view.unavailable,
         override: view.override.active,
-        canBoost: view.canBoost,
         boost,
         endMs: boost ? endMs : null,
         sensorsStale: view.sensorsStale,
@@ -1056,6 +962,8 @@ export class HeatingZoneCard extends HeatingBaseCard {
     if (model.problem) return this._entityProblem(['zone']);
     const { zone, rooms, busy, config } = model;
     const unit = zone.unit;
+    const hint = (config.tap_action?.action ?? 'more-info') === 'more-info' && !zone.unavailable
+      ? `<div class="hint">Tap a room, or the zone, for its target, heat/off and schedule</div>` : '';
     const chip = heatingChip(zone);
     const sched = zone.schedule;
     const now = sched?.current
@@ -1071,27 +979,20 @@ export class HeatingZoneCard extends HeatingBaseCard {
     }
 
     const rows = rooms.map((r) => {
-      const icon = r.off ? 'mdi:power' : r.boost && !r.away ? 'mdi:rocket-launch' : r.heating ? 'mdi:fire' : 'mdi:thermometer';
-      const iconClass = r.off ? 'off' : r.heating || r.boost ? 'heating' : '';
+      const boosted = r.boost && !r.away && !r.off;
+      const icon = r.off ? 'mdi:power' : boosted ? 'mdi:rocket-launch' : r.heating ? 'mdi:fire' : 'mdi:thermometer';
+      const iconClass = r.off ? 'off' : r.heating || boosted ? 'heating' : '';
       let status = r.unavailable ? 'Unavailable' : r.off ? 'Off' : r.away ? 'Away' : r.heating ? 'Heating' : 'Idle';
       if (r.override && !r.boost && !r.off) status += ' · manual';
       if (r.sensorsStale) status += ` · ${r.sensorsStale} sensor${r.sensorsStale === 1 ? '' : 's'} not reporting`;
-      const statusHtml = r.boost && r.endMs && !r.away
+      const statusHtml = boosted && r.endMs
         ? `<span data-countdown="${r.endMs}" data-prefix="Boost · " data-suffix=" left">Boost · ${formatCountdown((r.endMs - Date.now()) / 1000)} left</span>`
         : escapeHtml(status);
-      const boostButton = config.show_room_boost !== false && config.show_controls !== false
-        ? `<button class="round mini ${r.boost ? 'on' : ''}" data-action="room-boost" data-entity="${escapeHtml(r.entity)}"
-            ${(!r.boost && (!r.canBoost || r.away)) || r.unavailable || busy[`boost:${r.entity}`] ? 'disabled' : ''}
-            aria-pressed="${r.boost}" aria-label="${r.boost ? 'Cancel boost' : 'Boost'} ${escapeHtml(r.name)}"
-            title="${!r.canBoost ? 'Boost needs a temperature sensor in this room' : r.boost ? 'Cancel boost' : 'Boost'}">
-            <ha-icon icon="mdi:rocket-launch"></ha-icon></button>`
-        : '';
       return `<div class="row" data-tap="${escapeHtml(r.entity)}" role="button" tabindex="0" aria-label="${escapeHtml(r.name)} details">
           <div class="icon ${iconClass}"><ha-icon icon="${icon}"></ha-icon></div>
           <div class="what"><div class="rname">${escapeHtml(r.name)}</div><div class="rstatus">${statusHtml}</div></div>
           <div class="temps">${formatTemp(r.current, unit, { withUnit: true })}
             <div class="t">${r.off ? 'off' : `→ ${formatTemp(r.target, unit, { withUnit: true })}`}</div></div>
-          ${boostButton}
         </div>`;
     });
 
@@ -1101,10 +1002,6 @@ export class HeatingZoneCard extends HeatingBaseCard {
       actions.push(`<button class="action ${zone.boost.active ? 'on' : ''}" data-action="boost" ${busy.boost ? 'disabled' : ''}
         aria-pressed="${zone.boost.active}" title="${zone.boost.active ? 'Cancel every boost and manual temperature in this zone' : 'Boost every room with a sensor'}">
         <ha-icon icon="mdi:rocket-launch"></ha-icon>${zone.boost.active ? 'Cancel boosts' : 'Boost all'}</button>`);
-      if (zone.override.active && !zone.boost.active) {
-        actions.push(`<button class="action" data-action="schedule" ${busy.schedule ? 'disabled' : ''}>
-          <ha-icon icon="mdi:calendar-sync"></ha-icon>Resume schedule</button>`);
-      }
     }
 
     return `
@@ -1121,39 +1018,14 @@ export class HeatingZoneCard extends HeatingBaseCard {
           </div>
           <div class="rows">${rows.join('') || '<div class="empty">No rooms in this zone yet. Add them in the zone\'s settings on the Heating Manager integration page.</div>'}</div>
           ${actions.length ? `<div class="actions">${actions.join('')}</div>` : ''}
+          ${hint}
         </div>
       </ha-card>`;
   }
 
-  _onButton(action, data) {
+  _onButton(action) {
     const view = this._model();
-    if (view.problem) return;
-    if (action === 'room-boost') {
-      const room = view.rooms.find((r) => r.entity === data.entity);
-      if (room) this._toggleRoomBoost(room);
-    } else if (action === 'boost') {
-      this._toggleZoneBoost(view.zone);
-    } else if (action === 'schedule') {
-      this._call(`resume the schedule in ${view.zone.name}`, 'climate', 'set_preset_mode',
-        { preset_mode: 'schedule' }, undefined, 'schedule');
-    }
-  }
-
-  async _toggleRoomBoost(room) {
-    const key = `boost:${room.entity}`;
-    const turnOn = !room.boost;
-    this._setOptimistic(key, turnOn);
-    this._optimistic[key].since = Date.now();
-    this._update();
-    const data = {};
-    if (turnOn && this._config.boost_duration) data.duration = Number(this._config.boost_duration);
-    const ok = turnOn
-      ? await this._call(`boost ${room.name}`, DOMAIN, 'set_boost', data, room.entity, key)
-      : await this._call(`cancel the boost in ${room.name}`, DOMAIN, 'clear_boost', {}, room.entity, key);
-    if (!ok) {
-      this._clearOptimistic(key);
-      this._update();
-    }
+    if (!view.problem && action === 'boost') this._toggleZoneBoost(view.zone);
   }
 
   async _toggleZoneBoost(zone) {
@@ -1178,19 +1050,18 @@ const ENTITY_FILTER = { integration: DOMAIN, domain: 'climate' };
 const LABELS = {
   entity: 'Room, zone or whole house',
   name: 'Name',
-  show_controls: 'Show controls (target, boost, on/off)',
+  show_controls: 'Show the Boost button',
   show_schedule: 'Show the next schedule change',
   show_analytics: 'Show trend and time to target',
   boost_duration: 'Boost length (minutes)',
   tap_action: 'Tap action',
   hold_action: 'Hold action',
   rooms: 'Rooms to show (all if empty)',
-  show_room_boost: 'Boost button on each room',
 };
 
 const HELPERS = {
   entity: 'Heating Manager creates one for each room and zone, plus "Heating Manager" for the whole house.',
-  boost_duration: "Leave empty to use the integration's boost duration (Configure → Settings).",
+  boost_duration: "Leave empty to use the room's own boost duration (its Boost duration setting).",
   rooms: 'Pick rooms to show only those, in this order.',
 };
 
@@ -1359,11 +1230,9 @@ export class HeatingZoneCardEditor extends HeatingCardEditor {
           options: rooms.map((r) => ({ value: r.entity_id, label: roomName(r) })) } },
       }] : []),
       {
-        type: 'expandable', name: '', flatten: true, title: 'Display and boost', icon: 'mdi:eye-outline',
+        type: 'expandable', name: '', flatten: true, title: 'Display', icon: 'mdi:eye-outline',
         schema: [
           { name: 'show_controls', selector: { boolean: {} } },
-          { name: 'show_room_boost', selector: { boolean: {} } },
-          { name: 'boost_duration', selector: { number: { min: 1, max: 480, step: 5, mode: 'box', unit_of_measurement: 'min' } } },
           { name: 'tap_action', selector: { ui_action: {} } },
         ],
       },
