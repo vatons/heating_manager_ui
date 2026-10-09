@@ -54,6 +54,21 @@ export function withState(hass, entityId, { state, attributes } = {}) {
   };
 }
 
+/** Add the room's boost duration entity (Heating Manager 3.3+), as its device would have it. */
+export function withRoomDuration(hass, roomEntityId, minutes) {
+  const room = roomEntityId.split('.')[1];
+  const entityId = `number.${room}_boost_duration`;
+  const deviceId = hass.entities[roomEntityId].device_id;
+  return {
+    ...hass,
+    entities: {
+      ...hass.entities,
+      [entityId]: { entity_id: entityId, platform: 'heating_manager', device_id: deviceId, translation_key: 'boost_duration' },
+    },
+    states: { ...hass.states, [entityId]: { entity_id: entityId, state: String(minutes), attributes: {} } },
+  };
+}
+
 export function mount(tag, config, hass) {
   const el = document.createElement(tag);
   el.setConfig(config);

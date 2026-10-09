@@ -9,7 +9,7 @@ type: custom:heating-room-card
 entity: climate.downstairs_lounge
 
 # ================================================================
-# EXAMPLE 2: A room with a custom name and a 1-hour boost
+# EXAMPLE 2: A room with a custom name and a 1-hour boost (instead of the room's own boost duration)
 # ================================================================
 type: custom:heating-room-card
 entity: climate.upstairs_bedroom
@@ -17,7 +17,7 @@ name: Main bedroom
 boost_duration: 60
 
 # ================================================================
-# EXAMPLE 3: Just the temperature and status (no buttons or analytics)
+# EXAMPLE 3: Just the temperature and status (no Boost button or analytics)
 # ================================================================
 type: custom:heating-room-card
 entity: climate.downstairs_kitchen
@@ -31,7 +31,7 @@ type: custom:heating-zone-card
 entity: climate.downstairs
 
 # ================================================================
-# EXAMPLE 5: A zone with chosen rooms, in this order, and no per-room boost
+# EXAMPLE 5: A zone with chosen rooms, in this order
 # ================================================================
 type: custom:heating-zone-card
 entity: climate.upstairs
@@ -39,10 +39,9 @@ name: Bedrooms
 rooms:
   - climate.upstairs_main_bedroom
   - climate.upstairs_guest_bedroom
-show_room_boost: false
 
 # ================================================================
-# EXAMPLE 6: The whole house (heating demand, boost all, away mode)
+# EXAMPLE 6: The whole house (heating demand and Boost all; away mode in its dialog)
 # ================================================================
 type: custom:heating-room-card
 entity: climate.heating_manager

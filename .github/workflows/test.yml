@@ -17,14 +17,19 @@ jobs:
       - run: npm test
 
   contract:
-    # The cards against the real Heating Manager integration on Home Assistant
+    # The cards against the real Heating Manager integration on Home Assistant:
+    # the oldest supported version and the latest
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        heating_manager: [v3.2.0, main]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
         with:
           repository: vatons/heating_manager
-          ref: v3.2.0
+          ref: ${{ matrix.heating_manager }}
           path: heating_manager
       - uses: astral-sh/setup-uv@v6
       - run: uv venv --python 3.14 .venv && uv pip install --python .venv/bin/python -r contract/requirements.txt
@@ -34,14 +39,19 @@ jobs:
           HM_BACKEND: ${{ github.workspace }}/heating_manager
 
   e2e:
-    # The cards in Home Assistant 2026.10 with its frontend, in Chromium
+    # The cards in Home Assistant 2026.10 with its frontend, in Chromium,
+    # against the oldest supported Heating Manager and the latest
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        heating_manager: [v3.2.0, main]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
         with:
           repository: vatons/heating_manager
-          ref: v3.2.0
+          ref: ${{ matrix.heating_manager }}
           path: heating_manager
       - uses: actions/setup-node@v4
         with:
@@ -58,5 +68,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: e2e-screenshots
+          name: e2e-screenshots-${{ matrix.heating_manager }}
           path: e2e/screenshots/

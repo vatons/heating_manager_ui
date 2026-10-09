@@ -2,8 +2,10 @@
 
 Dashboard cards for the [Heating Manager](https://github.com/vatons/heating_manager) integration for Home Assistant.
 
-- **Heating Manager room** (`custom:heating-room-card`): one room, a zone or the whole house. Temperature, target with − / + buttons, boost with a live countdown, on/off, the next schedule change, trend and time to target.
-- **Heating Manager zone** (`custom:heating-zone-card`): a zone and all of its rooms, found automatically. Each room shows its temperature, target and status, with its own boost button.
+- **Heating Manager room** (`custom:heating-room-card`): one room, a zone or the whole house. Temperature, target, what it's following (with a live boost countdown), the next schedule change, trend, time to target, and a Boost button.
+- **Heating Manager zone** (`custom:heating-zone-card`): a zone and all of its rooms, found automatically, each with its temperature, target and status, and Boost all.
+
+The cards show what's going on and give you the one-tap action, **Boost**. Everything else (target, heat/off, back to the schedule, away mode) is in Home Assistant's own dialog, one tap on the card away.
 
 Both cards have a visual editor, so you don't need YAML.
 
@@ -12,7 +14,7 @@ Both cards have a visual editor, so you don't need YAML.
 | | Version |
 |---|---|
 | Home Assistant | 2025.7 or later (tested on 2026.10) |
-| Heating Manager | 3.2 or later |
+| Heating Manager | 3.2 or later; 3.4 recommended (Preset: Schedule clears a manual temperature, per-room boost durations) |
 
 Version 2 of the cards works with the entities Heating Manager 3.x creates (`climate.downstairs`, `climate.downstairs_lounge`, …). For Heating Manager 1.x and 2.x (`climate.<room>_hm`), use version 1.0 of the cards.
 
@@ -42,33 +44,35 @@ Version 2 of the cards works with the entities Heating Manager 3.x creates (`cli
 
 ![Room, zone and whole-house cards](docs/dashboard.png)
 
-- **Temperature** and **target**. Use − / + to change the target: the card waits a second after your last tap and then sends one change, so tapping + three times sends one update. Steps are 0.5 °C (1 °F).
+- **Temperature** and **target**.
 - **Status**: what the room is following, such as `Schedule until 17:00`, `Manual until 17:00`, `Boost · 42:10 left to 21.0°C`, `Away · frost protection` or `Off`.
 - **Chip**: `Heating`, `Idle`, `Off`, or `Monitoring` for rooms in a monitoring-only zone.
 - **Details**: the next schedule change, the temperature trend, the time to reach the target when the room is heating (`rough estimate` when the integration's confidence is under 50%), sensors that have stopped reporting, and `Using TRV temperature` for rooms without a sensor.
-- **Buttons**:
-  - **Boost** starts a boost for the integration's boost duration (or `boost_duration`); **Cancel boost** ends it. Rooms without a temperature sensor can't be boosted, so the button is disabled there.
-  - **Resume schedule** appears after you change the target, and clears the manual temperature.
-  - **Turn off / Turn on** switches the room off (its TRVs are held at the minimum and it never calls for heat) or back on. Boosting a room that's off turns it back on.
+- **Boost** starts a boost for the room's boost duration (its **Boost duration** setting, from Heating Manager 3.3, or the card's `boost_duration`); **Cancel boost** ends it. Rooms without a temperature sensor can't be boosted, so the button is disabled there. Boosting a room that's off turns it back on.
 
-Changes show on the card straight away. Heating Manager refreshes at most every 10 seconds, so the card keeps showing your change until the entity catches up (or for 15 seconds). If Home Assistant rejects a change, the card goes back and shows why.
+The boost shows on the card straight away. Heating Manager refreshes at most every 10 seconds, so the card keeps showing it until the entity catches up (or for 15 seconds). If Home Assistant rejects it, the card goes back and shows why.
 
-In away mode, targets are frost protection, so the target buttons are hidden and you can't start a boost. A boost that was already running can still be cancelled.
+**Tap the card** for Home Assistant's dialog, where you can:
+
+- change the target (a manual temperature until the schedule changes),
+- switch the room off or back on (**Mode**: Heat / Off),
+- go back to the schedule (**Preset**: Schedule, which clears a manual temperature or a boost; needs Heating Manager 3.4).
+
+Choose **Away** in the whole house's dialog, not a room's: it's for every zone.
 
 ### Zone and whole-house entities on the room card
 
 Pick a zone (e.g. `climate.downstairs`) or `climate.heating_manager` for the whole house:
 
-- The average temperature and target. − / + set a manual temperature for the zone (or every zone).
-- How many rooms need heat, the schedule, and boiler protection holds (`Heating (min on)`, `Waiting (min off)`).
+- The average temperature and target, how many rooms need heat, the schedule, and boiler protection holds (`Heating (min on)`, `Waiting (min off)`).
 - **Boost all** boosts every room with a sensor; **Cancel boosts** goes back to the schedule (clearing boosts and manual temperatures).
-- The whole-house card has **Away** to switch away mode on or off for every zone.
+- Tap the card for the zone's target and schedule, or on the whole-house card, away mode (**Preset**: Away).
 
 ### Zone card
 
 ![Zone card](docs/zone-card.png)
 
-Lists every room in the zone with its temperature, target and status. Rooms you add to the zone later appear without editing the card. Tap a room for its details, or its rocket to boost it. **Boost all** / **Cancel boosts** act on the whole zone.
+Lists every room in the zone with its temperature, target and status. Rooms you add to the zone later appear without editing the card. Tap a room for its dialog (target, heat/off, schedule, and Boost in its **Preset** list). **Boost all** / **Cancel boosts** act on the whole zone.
 
 ## Options
 
@@ -83,10 +87,10 @@ entity: climate.downstairs_lounge   # a room, a zone or climate.heating_manager
 |---|---|---|
 | `entity` | required | A Heating Manager climate entity |
 | `name` | room name | Name shown on the card. Room names are shown without their zone (`Lounge`, not `Downstairs Lounge`) |
-| `show_controls` | `true` | Target − / + and the buttons |
+| `show_controls` | `true` | The Boost button |
 | `show_schedule` | `true` | The next schedule change |
 | `show_analytics` | `true` | Trend and time to target |
-| `boost_duration` | integration setting | Boost length in minutes |
+| `boost_duration` | the room's | Boost length in minutes. Leave it out to use the room's own **Boost duration** |
 | `tap_action` | `more-info` | [Action](https://www.home-assistant.io/dashboards/actions/) when the card is tapped |
 | `hold_action` | `none` | Action when the card is held |
 
@@ -102,9 +106,7 @@ entity: climate.downstairs
 | `entity` | required | A Heating Manager zone entity |
 | `name` | zone name | Name shown on the card |
 | `rooms` | all rooms | Room entities to show, in this order |
-| `show_controls` | `true` | Boost buttons |
-| `show_room_boost` | `true` | A boost button on each room |
-| `boost_duration` | integration setting | Boost length in minutes for the room buttons |
+| `show_controls` | `true` | The Boost all button |
 | `tap_action` | `more-info` | Action when the zone's title is tapped |
 
 See [example-dashboard.yaml](example-dashboard.yaml) for more.
@@ -120,6 +122,11 @@ The cards use your theme's colours. To change them, set these in your theme (see
 | `heating-color-alpha` | Heating chip background | `rgba(255, 107, 53, 0.12)` |
 | `boost-color` | Active boost and away buttons | `heating-color` |
 | `cool-color` | Cooling trend | `info-color` |
+
+## Upgrading from 2.0
+
+- The cards no longer have target − / +, Turn off / on, Resume schedule, Away or a boost button on each zone-card room. Tap the card (or the room) for Home Assistant's dialog instead. Update Heating Manager to 3.4 so its **Preset: Schedule** clears a manual temperature.
+- `show_room_boost`, and `boost_duration` on the zone card, no longer do anything; they're ignored if left in.
 
 ## Upgrading from 1.0
 
@@ -145,8 +152,8 @@ The cards are a single JavaScript module with no build step and no dependencies.
 | Suite | What it checks | Command |
 |---|---|---|
 | Unit | Rendering, buttons, optimistic updates, editors, °C/°F, away, errors (Vitest + happy-dom) | `npm test` |
-| Contract | The real Heating Manager integration on Home Assistant: records the entity states the unit tests use (`test/fixtures/`) and runs every service call the cards make (`test/fixtures/service-calls.json`) | `npm run test:contract` |
-| End to end | Starts Home Assistant with its frontend and Heating Manager, then uses the cards in Chromium: boost, target, on/off, away, more info, the card picker and both editors. Screenshots go to `e2e/screenshots/` | `npm run test:e2e` |
+| Contract | The real Heating Manager integration on Home Assistant: records the entity states the unit tests use (`test/fixtures/`), runs every service call the cards make (`test/fixtures/service-calls.json`), and checks what the cards leave to the dialog. Runs against any version (`HM_BACKEND`); CI uses v3.2.0 and `main` | `npm run test:contract` |
+| End to end | Starts Home Assistant with its frontend and Heating Manager, then uses the cards in Chromium: boost, boost all, and through Home Assistant's dialog a manual temperature back to the schedule, off/on and away; the card picker and both editors. CI runs it against v3.2.0 and `main`. Screenshots go to `e2e/screenshots/` | `npm run test:e2e` |
 
 ```bash
 npm install

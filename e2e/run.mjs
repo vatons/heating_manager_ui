@@ -12,7 +12,7 @@
  */
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
@@ -22,6 +22,16 @@ const CONFIG = join(ROOT, 'e2e', '.ha-config');
 const SHOTS = join(ROOT, 'e2e', 'screenshots');
 const BACKEND = resolve(process.env.HM_BACKEND || join(ROOT, '..', 'heating_manager'));
 const HA_PYTHON = process.env.HA_PYTHON || 'python3';
+// The integration under test as major * 100 + minor (3.4 → 304): some steps need newer versions
+const BACKEND_VERSION = (() => {
+  try {
+    const { version } = JSON.parse(readFileSync(join(BACKEND, 'custom_components', 'heating_manager', 'manifest.json'), 'utf8'));
+    const [major, minor] = version.split('.').map(Number);
+    return major * 100 + minor;
+  } catch (_err) {
+    return 0;
+  }
+})();
 // Home Assistant's default port: setting http: in YAML makes 2026.10 ask to confirm it
 const PORT = 8123;
 const BASE = `http://127.0.0.1:${PORT}`;
@@ -217,6 +227,10 @@ async function step(name, fn) {
   }
 }
 
+async function callService(token, domain, service, data) {
+  return post(`/api/services/${domain}/${service}`, data, token);
+}
+
 const shadowText = (page, selector) => page.evaluate((sel) => {
   // Find the first matching element through every shadow root on the page
   const find = (root) => {
@@ -239,7 +253,7 @@ async function main() {
   writeConfig();
   mkdirSync(SHOTS, { recursive: true });
 
-  console.log(`Starting Home Assistant (${HA_PYTHON}) with Heating Manager from ${BACKEND}`);
+  console.log(`Starting Home Assistant (${HA_PYTHON}) with Heating Manager ${BACKEND_VERSION} from ${BACKEND}`);
   const ha = startHomeAssistant();
   let browser;
   try {
@@ -314,13 +328,33 @@ async function main() {
       await page.locator('heating-room-card').first().waitFor({ timeout: 60000 });
       await page.locator('heating-room-card .name').first().waitFor();
       await page.locator('heating-zone-card .row').first().waitFor();
-      assert.match(await Promise.race([versionLog, new Promise((r) => { setTimeout(() => r(''), 5000); })]), /v2\.0\.0/);
+      // The browser loaded this version of the cards, not a cached one
+      const { version } = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
+      assert.ok((await Promise.race([versionLog, new Promise((r) => { setTimeout(() => r(''), 5000); })])).includes(`v${version}`));
       await page.waitForTimeout(1500);
       await page.screenshot({ path: join(SHOTS, 'dashboard.png'), fullPage: true });
       await page.locator('heating-zone-card').screenshot({ path: join(SHOTS, 'zone-card.png') });
     });
 
     const loungeCard = page.locator('heating-room-card').filter({ has: page.locator('.name', { hasText: /^Lounge$/ }) });
+    // Home Assistant's more-info dialog, where the cards leave target, heat/off, schedule and away
+    const dialog = () => page.locator('ha-more-info-dialog');
+    const openDialog = async (card, title) => {
+      await card.locator('.title').click();
+      await dialog().getByText(title).first().waitFor({ timeout: 10000 });
+    };
+    const choose = async (control, option) => {
+      await dialog().getByText(control, { exact: true }).first().click();
+      // Case-insensitive: before Heating Manager 3.3 the presets had no names ("schedule")
+      const name = new RegExp(`^\\s*${option}\\s*$`, 'i');
+      await page.getByRole('menuitemradio', { name })
+        .or(page.getByRole('menuitem', { name }))
+        .or(page.getByRole('option', { name })).first().click();
+    };
+    const closeDialog = async () => {
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(600);
+    };
     const kitchenCard = page.locator('heating-room-card').filter({ has: page.locator('.name', { hasText: /^Kitchen$/ }) });
 
     await step('shows the room from the live entity', async () => {
@@ -339,28 +373,10 @@ async function main() {
       assert.equal(await loungeCard.locator('[data-action="boost"]').getAttribute('aria-pressed'), 'true');
     });
 
-    await step('sets a target with +', async () => {
-      const before = (await getState(token, 'climate.downstairs_kitchen')).attributes.temperature;
-      await kitchenCard.locator('[data-action="up"]').click();
-      await kitchenCard.locator('[data-action="up"]').click();
-      await waitFor(async () => (await getState(token, 'climate.downstairs_kitchen')).attributes.temperature === before + 1,
-        'the kitchen target to change', 20000, 250);
-      await waitFor(async () => (await kitchenCard.locator('[data-action="schedule"]').count()) === 1,
-        'Resume schedule to show', 20000, 250);
-    });
-
-    await step('resumes the schedule', async () => {
-      await kitchenCard.locator('[data-action="schedule"]').click();
-      await waitFor(async () => !(await getState(token, 'climate.downstairs_kitchen')).attributes.manual_override.active,
-        'the manual temperature to clear', 20000, 250);
-    });
-
-    await step('turns a room off and on', async () => {
-      await kitchenCard.locator('[data-action="power"]').click();
-      await waitFor(async () => (await getState(token, 'climate.downstairs_kitchen')).state === 'off', 'kitchen off', 20000, 250);
-      await waitFor(async () => (await kitchenCard.locator('.chip').textContent()).trim() === 'Off', 'the Off chip', 20000, 250);
-      await kitchenCard.locator('[data-action="power"]').click();
-      await waitFor(async () => (await getState(token, 'climate.downstairs_kitchen')).state === 'heat', 'kitchen on', 20000, 250);
+    await step('the cards offer only Boost, and say where the rest is', async () => {
+      assert.deepEqual(await kitchenCard.locator('[data-action]').evaluateAll((els) => els.map((e) => e.dataset.action)), ['boost']);
+      assert.equal(await kitchenCard.locator('.hint').textContent(), 'Tap for more controls');
+      assert.equal(await page.locator('heating-zone-card .row button').count(), 0);
     });
 
     await step("can't boost a room without sensors", async () => {
@@ -368,31 +384,75 @@ async function main() {
       assert.equal(await hall.locator('[data-action="boost"]').isDisabled(), true);
     });
 
-    await step('lists the zone’s rooms and boosts one from its row', async () => {
-      const zone = page.locator('heating-zone-card');
-      assert.deepEqual(await zone.locator('.rname').allTextContents(), ['Hall', 'Kitchen', 'Lounge', 'Study']);
-      await zone.locator('[data-action="room-boost"][data-entity="climate.downstairs_study"]').click();
-      await waitFor(async () => (await getState(token, 'climate.downstairs_study')).attributes.preset_mode === 'boost',
-        'the study to be boosted', 20000, 250);
+    await step('lists the zone’s rooms', async () => {
+      assert.deepEqual(await page.locator('heating-zone-card .rname').allTextContents(), ['Hall', 'Kitchen', 'Lounge', 'Study']);
     });
 
     await step('opens more info from a zone row', async () => {
       await page.locator('heating-zone-card .row', { hasText: 'Kitchen' }).locator('.rname').click();
-      const title = page.locator('ha-more-info-dialog').getByText('Downstairs Kitchen').first();
+      const title = dialog().getByText('Downstairs Kitchen').first();
       await title.waitFor({ timeout: 10000 });
       await page.screenshot({ path: join(SHOTS, 'more-info.png') });
-      await page.keyboard.press('Escape');
-      await title.waitFor({ state: 'hidden', timeout: 10000 });
+      await closeDialog();
     });
 
-    await step('turns away mode on and off from the whole-house card', async () => {
+    await step('a manual temperature shows on the card, and the dialog clears it (Heating Manager 3.4+)', async () => {
+      await callService(token, 'climate', 'set_temperature', { entity_id: 'climate.downstairs_kitchen', temperature: 22 });
+      await waitFor(async () => /^Manual until/.test(await kitchenCard.locator('.status').textContent()), 'the card to say Manual', 20000, 250);
+      if (BACKEND_VERSION < 304) return; // before 3.4 the preset reads "schedule", so the dialog can't clear it
+      await openDialog(kitchenCard, 'Downstairs Kitchen');
+      await choose('Preset', 'Schedule');
+      await waitFor(async () => !(await getState(token, 'climate.downstairs_kitchen')).attributes.manual_override.active,
+        'the manual temperature to clear', 20000, 250);
+      await closeDialog();
+      await waitFor(async () => /^Schedule until/.test(await kitchenCard.locator('.status').textContent()), 'the card to say Schedule', 20000, 250);
+    });
+
+    await step('turns a boosted room off and on in the dialog', async () => {
+      await openDialog(loungeCard, 'Downstairs Lounge');
+      await choose('Mode', 'Off');
+      await waitFor(async () => (await getState(token, 'climate.downstairs_lounge')).state === 'off', 'lounge off', 20000, 250);
+      await closeDialog();
+      await waitFor(async () => (await loungeCard.locator('.chip').textContent()).trim() === 'Off', 'the Off chip', 20000, 250);
+      if (BACKEND_VERSION >= 304) {
+        // Switching off ends the boost (it was boosted above)
+        await waitFor(async () => (await getState(token, 'climate.downstairs_lounge')).attributes.boost.temperature === null,
+          'the boost to end', 20000, 250);
+        await waitFor(async () => (await loungeCard.locator('[data-action="boost"]').getAttribute('aria-pressed')) === 'false',
+          'Boost to show as off', 20000, 250);
+      }
+      await openDialog(loungeCard, 'Downstairs Lounge');
+      await choose('Mode', 'Heat');
+      await waitFor(async () => (await getState(token, 'climate.downstairs_lounge')).state === 'heat', 'lounge on', 20000, 250);
+      await closeDialog();
+    });
+
+    await step('turns away mode on and off in the whole-house dialog', async () => {
       const house = page.locator('heating-room-card').filter({ has: page.locator('.name', { hasText: /^Heating Manager$/ }) });
-      await house.locator('[data-action="away"]').click();
+      await openDialog(house, 'Heating Manager');
+      await choose('Preset', 'Away');
       await waitFor(async () => (await getState(token, 'climate.heating_manager')).attributes.away_mode === true, 'away on', 20000, 250);
+      await closeDialog();
       await waitFor(async () => /Away/.test(await loungeCard.locator('.status').textContent()), 'the lounge to show away', 20000, 250);
       await page.screenshot({ path: join(SHOTS, 'away.png'), fullPage: true });
-      await house.locator('[data-action="away"]').click();
+      await openDialog(house, 'Heating Manager');
+      await choose('Preset', 'Schedule');
       await waitFor(async () => (await getState(token, 'climate.heating_manager')).attributes.away_mode === false, 'away off', 20000, 250);
+      await closeDialog();
+    });
+
+    await step('boosts the whole zone', async () => {
+      const zone = page.locator('heating-zone-card');
+      const label = (await zone.locator('[data-action="boost"]').textContent()).trim();
+      if (label === 'Cancel boosts') {
+        await zone.locator('[data-action="boost"]').click();
+        await waitFor(async () => !(await getState(token, 'climate.downstairs')).attributes.boost.active, 'boosts to end', 20000, 250);
+        await page.waitForTimeout(11000); // the integration refreshes at most every 10 s
+      }
+      await zone.locator('[data-action="boost"]').click();
+      await waitFor(async () => (await getState(token, 'climate.downstairs')).attributes.boost.room_ids.length === 3,
+        'every room with a sensor to be boosted', 20000, 250);
+      await waitFor(async () => (await zone.locator('[data-countdown]').count()) === 3, 'three countdowns', 20000, 250);
     });
 
     console.log('Card editor:');
@@ -424,7 +484,7 @@ async function main() {
       assert.equal(await preview.textContent(), 'Kitchen');
       // Turning a switch in the visual editor updates the preview
       await editor.getByText('Display', { exact: true }).first().click();
-      await editor.getByText('Show controls (target, boost, on/off)').first().waitFor({ timeout: 15000 });
+      await editor.getByText('Show the Boost button').first().waitFor({ timeout: 15000 });
       await page.screenshot({ path: join(SHOTS, 'card-editor-display.png') });
       await editor.locator('ha-switch').first().click();
       await waitFor(async () => (await page.locator('hui-dialog-edit-card heating-room-card .actions').count()) === 0,

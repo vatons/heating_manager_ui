@@ -1,6 +1,6 @@
 {
   "name": "heating-manager-ui",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Lovelace cards for the Heating Manager Home Assistant integration",
   "private": true,
   "type": "module",
