@@ -401,7 +401,12 @@ const STYLES = `
   .info .up { color: var(--hm-heat); }
   .info .down { color: var(--cool-color, var(--info-color, #039be5)); }
   .info .warn { color: var(--hm-warn); }
-  .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  /* The chip, with Boost under it, top right */
+  .side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; }
+  .actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+  /* The same size as the chip (its 1px border comes out of the padding) */
+  .side .action { height: auto; padding: 1px 7px 1px 5px; gap: 4px; border-radius: 12px; font-size: 12px; }
+  .side .action ha-icon { --mdc-icon-size: 16px; }
   .action { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px;
     border-radius: 18px; border: 1px solid var(--divider-color, rgba(127,127,127,0.3)); background: transparent;
     cursor: pointer; font-size: 14px; font-weight: 500; color: var(--primary-text-color); }
@@ -828,7 +833,10 @@ export class HeatingRoomCard extends HeatingBaseCard {
               <div class="name">${escapeHtml(view.name)}</div>
               ${sub ? `<div class="sub">${sub}</div>` : ''}
             </div>
-            <span class="chip ${chip.level}"><ha-icon icon="${chip.icon}"></ha-icon>${chip.label}</span>
+            <div class="side">
+              <span class="chip ${chip.level}"><ha-icon icon="${chip.icon}"></ha-icon>${chip.label}</span>
+              ${actions.length ? `<div class="actions">${actions.join('')}</div>` : ''}
+            </div>
           </div>
           <div class="main">
             <div class="current ${chip.level === 'heating' ? 'heating' : ''}" data-tap="">${formatTemp(view.current, unit)}<span class="unit">${unit}</span></div>
@@ -836,7 +844,6 @@ export class HeatingRoomCard extends HeatingBaseCard {
           </div>
           <div class="status">${status}</div>
           ${info.length ? `<div class="info">${info.join('')}</div>` : ''}
-          ${actions.length ? `<div class="actions">${actions.join('')}</div>` : ''}
         </div>
       </ha-card>`;
   }
@@ -1012,10 +1019,12 @@ export class HeatingZoneCard extends HeatingBaseCard {
               ${now ? `<div class="sub now">${now}</div>` : ''}
               ${next ? `<div class="sub next">${next}</div>` : ''}
             </div>
-            <span class="chip ${chip.level}"><ha-icon icon="${chip.icon}"></ha-icon>${chip.label}</span>
+            <div class="side">
+              <span class="chip ${chip.level}"><ha-icon icon="${chip.icon}"></ha-icon>${chip.label}</span>
+              ${actions.length ? `<div class="actions">${actions.join('')}</div>` : ''}
+            </div>
           </div>
           <div class="rows">${rows.join('') || '<div class="empty">No rooms in this zone yet. Add them in the zone\'s settings on the Heating Manager integration page.</div>'}</div>
-          ${actions.length ? `<div class="actions">${actions.join('')}</div>` : ''}
         </div>
       </ha-card>`;
   }
