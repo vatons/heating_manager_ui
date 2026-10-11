@@ -13,7 +13,7 @@
  * dependencies; both cards have a visual editor built on ha-form.
  */
 
-export const VERSION = '2.1.0';
+export const VERSION = '2.1.1';
 export const DOMAIN = 'heating_manager';
 
 // How long an optimistic change is shown before trusting the entity again. The
@@ -426,7 +426,6 @@ const STYLES = `
   .row .temps { text-align: right; font-size: 14px; color: var(--primary-text-color); white-space: nowrap; }
   .row .temps .t { font-size: 12px; color: var(--secondary-text-color); }
   .empty { padding: 12px 4px; color: var(--secondary-text-color); font-size: 13px; }
-  .hint { margin-top: 10px; font-size: 12px; color: var(--secondary-text-color); }
 `;
 
 // ---------------------------------------------------------------------------
@@ -819,8 +818,6 @@ export class HeatingRoomCard extends HeatingBaseCard {
     const target = `<div class="target"><div class="target-value"><div class="label">Target</div>
       <div class="value">${view.off ? 'Off' : formatTemp(view.target, unit, { withUnit: true })}</div></div></div>`;
     // The rest (target, heat/off, schedule, away) is in the more-info dialog a tap opens
-    const hint = (config.tap_action?.action ?? 'more-info') === 'more-info' && !view.unavailable
-      ? `<div class="hint">${HINTS[view.kind]}</div>` : '';
 
     return `
       <ha-card class="${view.unavailable ? 'unavailable' : ''}">
@@ -840,7 +837,6 @@ export class HeatingRoomCard extends HeatingBaseCard {
           <div class="status">${status}</div>
           ${info.length ? `<div class="info">${info.join('')}</div>` : ''}
           ${actions.length ? `<div class="actions">${actions.join('')}</div>` : ''}
-          ${hint}
         </div>
       </ha-card>`;
   }
@@ -879,13 +875,6 @@ export class HeatingRoomCard extends HeatingBaseCard {
 
 }
 
-// Short enough for one line on a narrow card
-const HINTS = {
-  room: 'Tap for more controls',
-  zone: 'Tap for more controls',
-  global: 'Tap for away mode & more',
-};
-
 function zoneSummary(view) {
   const parts = [];
   if (view.monitoringOnly) parts.push('Monitoring only');
@@ -894,6 +883,14 @@ function zoneSummary(view) {
   }
   if (view.stats?.mode === 'zone_average') parts.push('Zone average');
   return escapeHtml(parts.join(' · '));
+}
+
+/** The zone card's heat demand: how the zone decides it needs heat, and how many rooms do. */
+function zoneDemand(view) {
+  if (view.monitoringOnly) return 'Monitoring only';
+  const mode = view.stats?.mode === 'zone_average' ? 'Zone average' : 'Any room';
+  const n = view.stats?.roomsNeedingHeat;
+  return escapeHtml(n ? `${mode} · ${n} need${n === 1 ? 's' : ''} heat` : mode);
 }
 
 function globalSummary(view) {
@@ -962,21 +959,21 @@ export class HeatingZoneCard extends HeatingBaseCard {
     if (model.problem) return this._entityProblem(['zone']);
     const { zone, rooms, busy, config } = model;
     const unit = zone.unit;
-    const hint = (config.tap_action?.action ?? 'more-info') === 'more-info' && !zone.unavailable
-      ? `<div class="hint">Tap a room, or the zone, for its target, heat/off and schedule</div>` : '';
     const chip = heatingChip(zone);
     const sched = zone.schedule;
-    const now = sched?.current
-      ? `Now ${formatTemp(sched.current.temperature, unit, { withUnit: true })} until ${escapeHtml(sched.current.end)}`
-      : sched ? `Now ${formatTemp(sched.temperature, unit, { withUnit: true })}` : '';
-    const next = sched?.next
-      ? `Next ${formatTemp(sched.next.temperature, unit, { withUnit: true })} at ${escapeHtml(sched.next.start)}${sched.next.tomorrow ? ' tomorrow' : ''}`
+    // Three lines: the zone's heat demand (beside its temperature), now, next
+    const nowTemp = zone.override.active ? zone.override.temperature
+      : sched?.current ? sched.current.temperature : sched?.temperature;
+    const nowLabel = zone.override.active ? 'Manual' : 'Now';
+    const now = zone.away ? 'Away · frost protection'
+      : nowTemp != null
+        ? `${nowLabel} ${formatTemp(nowTemp, unit, { withUnit: true })}${sched?.current?.end ? ` until ${escapeHtml(sched.current.end)}` : ''}`
+        : '';
+    const n = sched?.next;
+    const next = n && !zone.away
+      ? `Next ${formatTemp(n.temperature, unit, { withUnit: true })} ${n.end ? `until ${escapeHtml(n.end)}` : `from ${escapeHtml(n.start)}`}${n.tomorrow ? ' tomorrow' : ''}`
       : '';
-    const subParts = [zoneSummary(zone), zone.away ? 'Away · frost protection' : [now, next].filter(Boolean).join(' · ')]
-      .filter(Boolean);
-    if (zone.override.active && !zone.away) {
-      subParts.push(`Manual ${formatTemp(zone.override.temperature, unit, { withUnit: true })}`);
-    }
+    const demand = zoneDemand(zone);
 
     const rows = rooms.map((r) => {
       const boosted = r.boost && !r.away && !r.off;
@@ -1011,14 +1008,14 @@ export class HeatingZoneCard extends HeatingBaseCard {
           <div class="header">
             <div class="title" data-tap="" role="button" tabindex="0" aria-label="${escapeHtml(zone.name)} details">
               <div class="name">${escapeHtml(zone.name)}
-                <span class="sub" style="display:inline">${formatTemp(zone.current, unit, { withUnit: true })}</span></div>
-              ${subParts.length ? `<div class="sub">${subParts.join(' · ')}</div>` : ''}
+                <span class="sub" style="display:inline">${formatTemp(zone.current, unit, { withUnit: true })}${demand ? ` · ${demand}` : ''}</span></div>
+              ${now ? `<div class="sub now">${now}</div>` : ''}
+              ${next ? `<div class="sub next">${next}</div>` : ''}
             </div>
             <span class="chip ${chip.level}"><ha-icon icon="${chip.icon}"></ha-icon>${chip.label}</span>
           </div>
           <div class="rows">${rows.join('') || '<div class="empty">No rooms in this zone yet. Add them in the zone\'s settings on the Heating Manager integration page.</div>'}</div>
           ${actions.length ? `<div class="actions">${actions.join('')}</div>` : ''}
-          ${hint}
         </div>
       </ha-card>`;
   }

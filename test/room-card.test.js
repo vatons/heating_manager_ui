@@ -254,19 +254,14 @@ describe('everything else is in the more-info dialog', () => {
     expect(button(el, 'schedule')).toBeNull();
   });
 
-  it('says where the rest is, and opens it on tap', () => {
+  it('opens the rest on tap, without a hint', () => {
     const el = mount(TAG, { entity: KITCHEN }, makeHass());
-    expect(text($(el, '.hint'))).toBe('Tap for more controls');
     const events = captureEvents(el, 'hass-action');
     click($(el, '.title'));
     expect(events[0].detail).toMatchObject({ action: 'tap', config: { tap_action: { action: 'more-info' } } });
-    expect(text($(mount(TAG, { entity: ZONE }, makeHass()), '.hint'))).toBe('Tap for more controls');
-    expect(text($(mount(TAG, { entity: GLOBAL }, makeHass()), '.hint'))).toBe('Tap for away mode & more');
-  });
-
-  it('has no hint when a tap does something else', () => {
-    const el = mount(TAG, { entity: KITCHEN, tap_action: { action: 'navigate', navigation_path: '/x' } }, makeHass());
-    expect($(el, '.hint')).toBeNull();
+    for (const entity of [KITCHEN, ZONE, GLOBAL]) {
+      expect($(mount(TAG, { entity }, makeHass()), '.hint')).toBeNull();
+    }
   });
 });
 
