@@ -72,7 +72,9 @@ Pick a zone (e.g. `climate.downstairs`) or `climate.heating_manager` for the who
 
 ![Zone card](docs/zone-card.png)
 
-Lists every room in the zone with its temperature, target and status. Rooms you add to the zone later appear without editing the card. Tap a room for its dialog (target, heat/off, schedule, and Boost in its **Preset** list). **Boost all** / **Cancel boosts** act on the whole zone.
+The title shows the zone's temperature and heat demand (**Any room** or **Zone average**, and how many rooms need heat), what it's set to now (`Now 19.0°C until 17:00`, or `Manual …`, or `Away · frost protection`) and the next period (`Next 21.0°C until 22:30`).
+
+Below it, every room in the zone with its temperature, target and status. Rooms you add to the zone later appear without editing the card. Tap a room for its dialog (target, heat/off, schedule, and Boost in its **Preset** list). **Boost all** / **Cancel boosts** act on the whole zone.
 
 ## Options
 

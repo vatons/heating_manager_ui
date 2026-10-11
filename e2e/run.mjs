@@ -373,9 +373,9 @@ async function main() {
       assert.equal(await loungeCard.locator('[data-action="boost"]').getAttribute('aria-pressed'), 'true');
     });
 
-    await step('the cards offer only Boost, and say where the rest is', async () => {
+    await step('the cards offer only Boost, without hints', async () => {
       assert.deepEqual(await kitchenCard.locator('[data-action]').evaluateAll((els) => els.map((e) => e.dataset.action)), ['boost']);
-      assert.equal(await kitchenCard.locator('.hint').textContent(), 'Tap for more controls');
+      assert.equal(await page.locator('heating-room-card .hint, heating-zone-card .hint').count(), 0);
       assert.equal(await page.locator('heating-zone-card .row button').count(), 0);
     });
 
@@ -386,6 +386,12 @@ async function main() {
 
     await step('lists the zone’s rooms', async () => {
       assert.deepEqual(await page.locator('heating-zone-card .rname').allTextContents(), ['Hall', 'Kitchen', 'Lounge', 'Study']);
+    });
+
+    await step('the zone card shows its heat demand, now and next on their own lines', async () => {
+      const zone = page.locator('heating-zone-card');
+      assert.match(await zone.locator('.name').textContent(), /Downstairs\s+[\d.]+°C · (Any room|Zone average)/);
+      assert.match(await zone.locator('.sub.now').textContent(), /^(Now|Manual) [\d.]+°C( until \d\d:\d\d)?$/);
     });
 
     await step('opens more info from a zone row', async () => {

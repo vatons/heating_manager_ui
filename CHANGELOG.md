@@ -5,6 +5,13 @@ All notable changes to the Heating Manager cards (formerly Heating Room Card) wi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.1] - 2026-10-11
+
+### Changed
+- The zone card's title is on three lines: the zone's temperature and heat demand (Any room or Zone average, and how many rooms need heat), then the current period (`Now 19.0°C until 17:00`, or a manual temperature), then the next one (`Next 21.0°C until 22:30`).
+- Boost (and Boost all) is top right, under the status chip and the same size as it.
+- Removed the hints under the cards ("Tap for more controls" and the zone card's). A tap still opens Home Assistant's dialog.
+
 ## [2.1.0] - 2026-10-09
 
 Simpler cards: they show what's going on and keep the one-tap action, Boost. Everything else is in Home Assistant's own dialog, a tap on the card away.

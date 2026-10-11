@@ -36,11 +36,33 @@ describe('zone card', () => {
 
   it('shows the zone, its schedule and heating demand', () => {
     const el = mount(TAG, { entity: ZONE }, makeHass());
-    expect(text($(el, '.name'))).toBe('Downstairs 17.7°C');
-    expect(text($(el, '.title .sub:not([style])'))).toBe(
-      '2 rooms need heat · Now 18.0°C until 17:00 · Next 21.0°C at 17:00',
-    );
+    expect(text($(el, '.name'))).toBe('Downstairs 17.7°C · Any room · 2 need heat');
+    expect($$(el, '.title .sub:not([style])').map(text)).toEqual([
+      'Now 18.0°C until 17:00',
+      'Next 21.0°C until 22:30',
+    ]);
     expect(text($(el, '.chip'))).toBe('Heating');
+  });
+
+  it('shows a zone-average zone, and one room needing heat', () => {
+    const hass = withState(makeHass(), ZONE, {
+      attributes: { heating_demand_mode: 'zone_average', rooms_needing_heat: ['lounge'] },
+    });
+    const el = mount(TAG, { entity: ZONE }, hass);
+    expect(text($(el, '.name'))).toBe('Downstairs 17.7°C · Zone average · 1 needs heat');
+  });
+
+  it('shows when nothing needs heat, and tomorrow’s next period', () => {
+    const zone = makeHass().states[ZONE];
+    const hass = withState(makeHass(), ZONE, {
+      attributes: {
+        rooms_needing_heat: [],
+        schedule: { ...zone.attributes.schedule, next_period: { start: '06:30', end: '08:30', temperature: 20, tomorrow: true } },
+      },
+    });
+    const el = mount(TAG, { entity: ZONE }, hass);
+    expect(text($(el, '.name'))).toBe('Downstairs 17.7°C · Any room');
+    expect(text($(el, '.sub.next'))).toBe('Next 20.0°C until 08:30 tomorrow');
   });
 
   it('shows the chosen rooms in the chosen order', () => {
@@ -68,7 +90,7 @@ describe('zone card', () => {
     const el = mount(TAG, { entity: ZONE }, makeHass());
     expect($$(el, '.row button')).toEqual([]);
     expect($$(el, '[data-action]').map((b) => b.dataset.action)).toEqual(['boost']);
-    expect(text($(el, '.hint'))).toBe('Tap a room, or the zone, for its target, heat/off and schedule');
+    expect($(el, '.hint')).toBeNull();
   });
 
   it('shows an off room as off, even if its boost hasn’t ended (Heating Manager before 3.4)', () => {
@@ -105,12 +127,13 @@ describe('zone card', () => {
   it('shows a monitoring-only zone', () => {
     const el = mount(TAG, { entity: UPSTAIRS }, makeHass());
     expect(text($(el, '.chip'))).toBe('Monitoring');
+    expect(text($(el, '.name'))).toContain('· Monitoring only');
     expect(rows(el).map((r) => r.name)).toEqual(['Bathroom']);
   });
 
   it('in away mode', () => {
     const el = mount(TAG, { entity: ZONE }, makeHass('v3.2.0-away'));
-    expect(text($(el, '.title .sub:not([style])'))).toContain('Away · frost protection');
+    expect($$(el, '.title .sub:not([style])').map(text)).toEqual(['Away · frost protection']);
     expect(button(el, 'boost')).toBeNull();
   });
 
@@ -126,7 +149,7 @@ describe('zone card', () => {
 
   it('in °F', () => {
     const el = mount(TAG, { entity: ZONE }, makeHass('v3.2.0-fahrenheit'));
-    expect(text($(el, '.title .sub:not([style])'))).toContain('Now 64°F until 17:00 · Next 70°F at 17:00');
+    expect($$(el, '.title .sub:not([style])').map(text)).toEqual(['Now 64°F until 17:00', 'Next 70°F until 22:30']);
     expect(rows(el)[2].temps).toBe('64°F → 68°F');
   });
 
@@ -135,7 +158,7 @@ describe('zone card', () => {
       attributes: { manual_override: { active: true, temperature: 21 }, boost: { active: false, room_ids: [] } },
     });
     const el = mount(TAG, { entity: ZONE }, hass);
-    expect(text($(el, '.title .sub:not([style])'))).toContain('Manual 21.0°C');
+    expect(text($(el, '.sub.now'))).toBe('Manual 21.0°C until 17:00');
     // Cleared from the zone's dialog (Preset: Schedule)
     expect(button(el, 'schedule')).toBeNull();
   });
