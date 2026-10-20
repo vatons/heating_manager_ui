@@ -9,8 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Skip to next (Heating Manager 3.11+; Preset → Skip to next in a room's or zone's dialog from 3.12). The room card says `Skipped · 20.0°C`, the zone card `Skipped to 20.0°C` (without its Next line), and its rooms `· skipped`. The whole-house card says `Skipped` while a zone is.
-- **Skip** button next to Boost on room, zone and whole-house cards (Heating Manager 3.12+; 3.11 for the whole house): skips to the next scheduled temperature now, or while skipped goes back to the schedule. Disabled when off, in away mode, or with no schedule change to skip to. `show_controls: false` hides it with Boost.
-- On narrow cards the buttons stack under the chip, so the name keeps its room; side by side when the card is wide.
+- **Skip to next** on room, zone and whole-house cards (Heating Manager 3.12+; 3.11 for the whole house): the next scheduled temperature now; **Cancel skip** goes back to the schedule. Disabled when off, in away mode, or with no schedule change to skip to.
+
+### Changed
+- Boost and Skip are in a **⋮ menu** beside the status chip, so the header is one row and long names have room. Unavailable actions stay in the menu, disabled, saying why (no sensor, away mode, nothing to skip to). The ⋮ turns the boost colour while a boost or skip is on. Works with the keyboard (arrows, Escape) and closes on a tap elsewhere.
+- `show_controls: false` hides the menu.
 - With Heating Manager 3.13+, skips and manual temperatures say when they end, from `manual_override.until`: `Skipped · 20.0°C until 12:00 tomorrow`, `Manual until 18:15`.
 
 ### Fixed

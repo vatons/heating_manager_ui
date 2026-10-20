@@ -135,11 +135,11 @@ describe('boost', () => {
     const hass = makeHass();
     const el = mount(TAG, { entity: KITCHEN }, hass);
     const boost = button(el, 'boost');
-    expect(text(boost)).toBe('Boost');
+    expect(text(boost)).toBe('Boost for 30 min');
     click(boost);
     expect(hass.callService).toHaveBeenCalledWith('heating_manager', 'set_boost', {}, { entity_id: KITCHEN }, false);
     // Shown at once, before the entity updates
-    expect(button(el, 'boost').getAttribute('aria-pressed')).toBe('true');
+    expect(button(el, 'boost').getAttribute('aria-checked')).toBe('true');
     expect(text($(el, '.status'))).toBe('Boost · 30:00 left');
   });
 
@@ -157,7 +157,7 @@ describe('boost', () => {
     expect(text(button(el, 'boost'))).toBe('Cancel boost');
     click(button(el, 'boost'));
     expect(hass.callService).toHaveBeenCalledWith('heating_manager', 'clear_boost', {}, { entity_id: ROOM }, false);
-    expect(button(el, 'boost').getAttribute('aria-pressed')).toBe('false');
+    expect(button(el, 'boost').getAttribute('aria-checked')).toBe('false');
   });
 
   it('keeps showing the boost while the integration catches up, then trusts the entity', async () => {
@@ -167,10 +167,10 @@ describe('boost', () => {
     await flush();
     // The integration's refresh is debounced: an update can still show the old state
     el.hass = withState(hass, KITCHEN, { attributes: { current_temperature: 18.1 } });
-    expect(button(el, 'boost').getAttribute('aria-pressed')).toBe('true');
+    expect(button(el, 'boost').getAttribute('aria-checked')).toBe('true');
     // The boost never showed up (e.g. cancelled elsewhere): back to the entity's state
     vi.advanceTimersByTime(OPTIMISTIC_TIMEOUT_MS + 100);
-    expect(button(el, 'boost').getAttribute('aria-pressed')).toBe('false');
+    expect(button(el, 'boost').getAttribute('aria-checked')).toBe('false');
   });
 
   it('switches to the real end time once the entity confirms', async () => {
@@ -185,7 +185,7 @@ describe('boost', () => {
     // 20:20 end, 5 s after the tap
     expect(text($(el, '.status'))).toBe('Boost · 19:55 left to 20.0°C');
     vi.advanceTimersByTime(OPTIMISTIC_TIMEOUT_MS);
-    expect(button(el, 'boost').getAttribute('aria-pressed')).toBe('true');
+    expect(button(el, 'boost').getAttribute('aria-checked')).toBe('true');
   });
 
   it('says why a boost failed and undoes it', async () => {
@@ -197,14 +197,15 @@ describe('boost', () => {
     click(button(el, 'boost'));
     await flush();
     expect(events).toEqual([{ type: 'hass-notification', detail: { message: "Couldn't boost Kitchen: room temperature is unavailable" } }]);
-    expect(button(el, 'boost').getAttribute('aria-pressed')).toBe('false');
+    expect(button(el, 'boost').getAttribute('aria-checked')).toBe('false');
     expect(button(el, 'boost').disabled).toBe(false);
   });
 
   it('is disabled for rooms without a temperature sensor', () => {
     const el = mount(TAG, { entity: HALL }, makeHass());
     expect(button(el, 'boost').disabled).toBe(true);
-    expect(button(el, 'boost').title).toBe('Boost needs a temperature sensor in this room');
+    // Says why, under the menu item
+    expect(text($(el, '[data-action="boost"] .why'))).toBe('Needs a temperature sensor in this room');
     expect(text($(el, '.info'))).toContain('Using TRV temperature');
   });
 
@@ -218,7 +219,7 @@ describe('boost', () => {
   it("starts the countdown from the room's own boost duration", () => {
     const hass = withRoomDuration(makeHass(), KITCHEN, 45);
     const el = mount(TAG, { entity: KITCHEN }, hass);
-    expect(button(el, 'boost').title).toBe('Boost for 45 min');
+    expect(text(button(el, 'boost'))).toBe('Boost for 45 min');
     click(button(el, 'boost'));
     // The integration applies the room's duration itself, so none is sent
     expect(hass.callService).toHaveBeenCalledWith('heating_manager', 'set_boost', {}, { entity_id: KITCHEN }, false);
@@ -263,6 +264,73 @@ describe('everything else is in the more-info dialog', () => {
     expect(text($(el, '.info') || { textContent: '' })).not.toContain('→');
   });
 
+  describe('the ⋮ menu', () => {
+    const menu = (el) => $(el, '.menu');
+    const menuButton = (el) => $(el, '[data-menu]');
+    const key = (el, k) => el.shadowRoot.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, composed: true }));
+
+    it('is closed until ⋮ is pressed, then lists Boost and Skip', () => {
+      const el = mount(TAG, { entity: KITCHEN }, withSkip(makeHass()));
+      expect(menu(el).hidden).toBe(true);
+      expect(menuButton(el).getAttribute('aria-expanded')).toBe('false');
+      click(menuButton(el));
+      expect(menu(el).hidden).toBe(false);
+      expect(menuButton(el).getAttribute('aria-expanded')).toBe('true');
+      expect($$(el, '.menu [role="menuitemcheckbox"]').map((b) => b.dataset.action)).toEqual(['boost', 'skip']);
+      // The first item has focus, for the keyboard
+      expect(el.shadowRoot.activeElement?.dataset.action).toBe('boost');
+    });
+
+    it('closes when an item is chosen, and does it', () => {
+      const hass = withSkip(makeHass());
+      const el = mount(TAG, { entity: KITCHEN }, hass);
+      click(menuButton(el));
+      click(button(el, 'skip'));
+      expect(menu(el).hidden).toBe(true);
+      expect(hass.callService).toHaveBeenCalledWith('climate', 'set_preset_mode', { preset_mode: 'skip_to_next' },
+        { entity_id: KITCHEN }, false);
+    });
+
+    it('stays open when a disabled item is pressed', () => {
+      const el = mount(TAG, { entity: HALL }, withSkip(makeHass()));
+      click(menuButton(el));
+      click(button(el, 'boost'));
+      expect(menu(el).hidden).toBe(false);
+    });
+
+    it('closes on Escape, back to ⋮, and the arrows move between items', () => {
+      const el = mount(TAG, { entity: KITCHEN }, withSkip(makeHass()));
+      click(menuButton(el));
+      key(el, 'ArrowDown');
+      expect(el.shadowRoot.activeElement?.dataset.action).toBe('skip');
+      key(el, 'ArrowDown');
+      expect(el.shadowRoot.activeElement?.dataset.action).toBe('boost');
+      key(el, 'ArrowUp');
+      expect(el.shadowRoot.activeElement?.dataset.action).toBe('skip');
+      key(el, 'Escape');
+      expect(menu(el).hidden).toBe(true);
+      expect(el.shadowRoot.activeElement).toBe(menuButton(el));
+    });
+
+    it('closes on a tap outside the card, not inside it', () => {
+      const el = mount(TAG, { entity: KITCHEN }, withSkip(makeHass()));
+      click(menuButton(el));
+      $(el, '.menu').dispatchEvent(new Event('pointerdown', { bubbles: true, composed: true }));
+      expect(menu(el).hidden).toBe(false);
+      document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+      expect(menu(el).hidden).toBe(true);
+    });
+
+    it('⋮ is coloured while a boost or skip is on', () => {
+      expect(menuButton(mount(TAG, { entity: ROOM }, makeHass())).classList.contains('on')).toBe(true);
+      expect(menuButton(mount(TAG, { entity: HALL }, makeHass())).classList.contains('on')).toBe(false);
+    });
+
+    it('isn\u2019t there with show_controls: false', () => {
+      expect(menuButton(mount(TAG, { entity: KITCHEN, show_controls: false }, withSkip(makeHass())))).toBeNull();
+    });
+  });
+
   describe('Skip (Heating Manager 3.12+)', () => {
     it('isn\u2019t there before Heating Manager 3.12', () => {
       expect(button(mount(TAG, { entity: KITCHEN }, makeHass()), 'skip')).toBeNull();
@@ -272,15 +340,15 @@ describe('everything else is in the more-info dialog', () => {
       const hass = withSkip(makeHass());
       const el = mount(TAG, { entity: KITCHEN }, hass);
       const skip = button(el, 'skip');
-      expect(text(skip)).toBe('Skip');
-      expect(skip.getAttribute('title')).toBe('Skip to 21.0°C now, the next scheduled temperature');
+      expect(text(skip)).toBe('Skip to next');
+      expect(skip.getAttribute('title')).toBe('To 21.0°C now, the next scheduled temperature');
       click(skip);
       expect(hass.callService).toHaveBeenCalledWith('climate', 'set_preset_mode', { preset_mode: 'skip_to_next' },
         { entity_id: KITCHEN }, false);
       await flush();
       expect(text($(el, '.status'))).toBe('Skipped · 21.0°C until 22:30');
-      expect(text(button(el, 'skip'))).toBe('Skipped');
-      expect(button(el, 'skip').getAttribute('aria-pressed')).toBe('true');
+      expect(text(button(el, 'skip'))).toBe('Cancel skip');
+      expect(button(el, 'skip').getAttribute('aria-checked')).toBe('true');
     });
 
     it('while skipped, goes back to the schedule', () => {
@@ -296,10 +364,10 @@ describe('everything else is in the more-info dialog', () => {
 
     it('a skip ends the boost on the card too', async () => {
       const el = mount(TAG, { entity: ROOM }, withSkip(makeHass()));
-      expect(button(el, 'boost').getAttribute('aria-pressed')).toBe('true');
+      expect(button(el, 'boost').getAttribute('aria-checked')).toBe('true');
       click(button(el, 'skip'));
       await flush();
-      expect(button(el, 'boost').getAttribute('aria-pressed')).toBe('false');
+      expect(button(el, 'boost').getAttribute('aria-checked')).toBe('false');
       expect(text($(el, '.status'))).toMatch(/^Skipped/);
     });
 
@@ -334,7 +402,7 @@ describe('everything else is in the more-info dialog', () => {
     it('on the whole house skips every zone', () => {
       const hass = withSkip(makeHass());
       const el = mount(TAG, { entity: GLOBAL }, hass);
-      expect(button(el, 'skip').getAttribute('title')).toBe('Skip every zone to its next scheduled temperature now');
+      expect(button(el, 'skip').getAttribute('title')).toBe('Every zone to its next scheduled temperature now');
       click(button(el, 'skip'));
       expect(hass.callService).toHaveBeenCalledWith('climate', 'set_preset_mode', { preset_mode: 'skip_to_next' },
         { entity_id: GLOBAL }, false);

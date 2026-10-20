@@ -2,10 +2,10 @@
 
 Dashboard cards for the [Heating Manager](https://github.com/vatons/heating_manager) integration for Home Assistant.
 
-- **Heating Manager room** (`custom:heating-room-card`): one room, a zone or the whole house. Temperature, target, what it's following (with a live boost countdown), the next schedule change, trend, time to target, and a Boost button.
-- **Heating Manager zone** (`custom:heating-zone-card`): a zone and all of its rooms, found automatically, each with its temperature, target and status, and Boost all.
+- **Heating Manager room** (`custom:heating-room-card`): one room, a zone or the whole house. Temperature, target, what it's following (with a live boost countdown), the next schedule change, trend, time to target, and a ⋮ menu with Boost and Skip.
+- **Heating Manager zone** (`custom:heating-zone-card`): a zone and all of its rooms, found automatically, each with its temperature, target and status, and a ⋮ menu with Boost all and Skip.
 
-The cards show what's going on and give you the one-tap actions, **Boost** and **Skip** (to the next scheduled temperature). Everything else (target, heat/off, back to the schedule, away mode) is in Home Assistant's own dialog, one tap on the card away.
+The cards show what's going on, and their ⋮ menu (beside the status chip) has the quick actions, **Boost** and **Skip** (to the next scheduled temperature). Everything else (target, heat/off, back to the schedule, away mode) is in Home Assistant's own dialog, one tap on the card away.
 
 Both cards have a visual editor, so you don't need YAML.
 
@@ -48,8 +48,9 @@ Version 2 of the cards works with the entities Heating Manager 3.x creates (`cli
 - **Status**: what the room is following, such as `Schedule until 17:00`, `Manual until 17:00`, `Skipped · 20.0°C` (skipped to the next scheduled temperature, Heating Manager 3.11+), `Boost · 42:10 left to 21.0°C`, `Away · frost protection` or `Off`.
 - **Chip**: `Heating`, `Idle`, `Off`, or `Monitoring` for rooms in a monitoring-only zone.
 - **Details**: the next schedule change, the temperature trend, the time to reach the target when the room is heating (`rough estimate` when the integration's confidence is under 50%), sensors that have stopped reporting, and `Using TRV temperature` for rooms without a sensor.
-- **Boost** starts a boost for the room's boost duration (its **Boost duration** setting, from Heating Manager 3.3, or the card's `boost_duration`); **Cancel boost** ends it. Rooms without a temperature sensor can't be boosted, so the button is disabled there. Boosting a room that's off turns it back on.
-- **Skip** (Heating Manager 3.12+) goes to the next scheduled temperature now, until the change after it; press it again (**Skipped**) to go back to the schedule. It's disabled when the room is off, in away mode, or when the schedule has no change coming.
+- **⋮ → Boost for 30 min** starts a boost for the room's boost duration (its **Boost duration** setting, from Heating Manager 3.3, or the card's `boost_duration`); **Cancel boost** ends it. Rooms without a temperature sensor can't be boosted, so it's disabled there, saying why. Boosting a room that's off turns it back on.
+- **⋮ → Skip to next** (Heating Manager 3.12+) goes to the next scheduled temperature now, until the change after it; **Cancel skip** goes back to the schedule. It's disabled when the room is off, in away mode, or when the schedule has no change coming.
+- The ⋮ turns the boost colour while a boost or skip is on.
 
 The boost shows on the card straight away. Heating Manager refreshes at most every 10 seconds, so the card keeps showing it until the entity catches up (or for 15 seconds). If Home Assistant rejects it, the card goes back and shows why.
 
@@ -91,7 +92,7 @@ entity: climate.downstairs_lounge   # a room, a zone or climate.heating_manager
 |---|---|---|
 | `entity` | required | A Heating Manager climate entity |
 | `name` | room name | Name shown on the card. Room names are shown without their zone (`Lounge`, not `Downstairs Lounge`) |
-| `show_controls` | `true` | The Boost and Skip buttons |
+| `show_controls` | `true` | The ⋮ menu (Boost and Skip) |
 | `show_schedule` | `true` | The next schedule change |
 | `show_analytics` | `true` | Trend and time to target |
 | `boost_duration` | the room's | Boost length in minutes. Leave it out to use the room's own **Boost duration** |
@@ -110,7 +111,7 @@ entity: climate.downstairs
 | `entity` | required | A Heating Manager zone entity |
 | `name` | zone name | Name shown on the card |
 | `rooms` | all rooms | Room entities to show, in this order |
-| `show_controls` | `true` | The Boost all and Skip buttons |
+| `show_controls` | `true` | The ⋮ menu (Boost all and Skip) |
 | `tap_action` | `more-info` | Action when the zone's title is tapped |
 
 See [example-dashboard.yaml](example-dashboard.yaml) for more.
@@ -124,7 +125,7 @@ The cards use your theme's colours. To change them, set these in your theme (see
 | `heating-color` | Heating status, temperature and bar | `state-climate-heat-color`, else `#ff6b35` |
 | `heating-color-light` | End of the heating bar's gradient | `#ff8c42` |
 | `heating-color-alpha` | Heating chip background | `rgba(255, 107, 53, 0.12)` |
-| `boost-color` | Active boost and away buttons | `heating-color` |
+| `boost-color` | The ⋮ and its menu items while a boost or skip is on | `heating-color` |
 | `cool-color` | Cooling trend | `info-color` |
 
 ## Upgrading from 2.0
@@ -145,7 +146,7 @@ The cards use your theme's colours. To change them, set these in your theme (see
 
 **"Waiting for Heating Manager…"**: the integration is starting and hasn't updated its rooms yet. It clears by itself.
 
-**Boost is greyed out**: the room has no temperature sensor (add one in the zone's form on the Heating Manager integration page), or away mode is on.
+**Boost is greyed out in the ⋮ menu**: the room has no temperature sensor (add one in the zone's form on the Heating Manager integration page), or away mode is on.
 
 **The card doesn't appear after updating**: reload the browser, clearing its cache if needed. The browser console shows `HEATING-MANAGER-UI v2.0.0` when the new version is loaded.
 

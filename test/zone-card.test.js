@@ -134,7 +134,9 @@ describe('zone card', () => {
   it('in away mode', () => {
     const el = mount(TAG, { entity: ZONE }, makeHass('v3.2.0-away'));
     expect($$(el, '.title .sub:not([style])').map(text)).toEqual(['Away · frost protection']);
-    expect(button(el, 'boost')).toBeNull();
+    // In the menu, but disabled, saying why
+    expect(button(el, 'boost').disabled).toBe(true);
+    expect(text($(el, '[data-action="boost"] .why'))).toBe('Not in away mode');
   });
 
   it('in away mode with a boost still running', () => {
@@ -201,7 +203,7 @@ describe('zone card', () => {
       { entity_id: ZONE }, false);
     await flush();
     expect($$(el, '.title .sub:not([style])').map(text)).toEqual(['Skipped to 21.0°C until 22:30']);
-    expect(text(button(el, 'skip'))).toBe('Skipped');
+    expect(text(button(el, 'skip'))).toBe('Cancel skip');
   });
 
   it('a skipped zone in away mode shows away', () => {
