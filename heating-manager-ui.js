@@ -13,7 +13,7 @@
  * dependencies; both cards have a visual editor built on ha-form.
  */
 
-export const VERSION = '2.1.1';
+export const VERSION = '2.2.0';
 export const DOMAIN = 'heating_manager';
 
 // How long an optimistic change is shown before trusting the entity again. The
@@ -203,7 +203,7 @@ export function describe(hass, stateObj, now = Date.now()) {
     away,
     monitoringOnly: false,
     boost: { active: false, secondsLeft: null, endTime: null, temperature: null, rooms: [] },
-    override: { active: false, temperature: null },
+    override: { active: false, temperature: null, skipped: false },
     canBoost: false,
     sensorsMissing: false,
     sensorsStale: 0,
@@ -232,7 +232,8 @@ export function describe(hass, stateObj, now = Date.now()) {
     view.monitoringOnly = zone?.attributes?.monitoring_only === true;
     if (zone) view.schedule = scheduleInfo(zone.attributes.schedule, unit);
     const analytics = a.heating_analytics || {};
-    view.trend = trendInfo(analytics.temperature_trend);
+    // Under current from Heating Manager 3.6
+    view.trend = trendInfo(analytics.current?.trend ?? analytics.temperature_trend);
     const eta = analytics.estimated_time_to_target || {};
     if (heating && eta.minutes !== null && eta.minutes !== undefined) {
       view.eta = {
@@ -267,6 +268,9 @@ export function describe(hass, stateObj, now = Date.now()) {
   if (override.active) {
     view.override.active = true;
     view.override.temperature = fromCelsius(override.temperature, unit);
+    // Skipped to the next scheduled temperature (Heating Manager 3.11+). The whole
+    // house says so only in its preset.
+    view.override.skipped = override.skipped === true || a.preset_mode === 'skip_to_next';
   }
   return view;
 }
@@ -284,6 +288,15 @@ function scheduleInfo(schedule, unit) {
   };
 }
 
+/**
+ * When a skip ends: it's at the next period's temperature now, so the period after it.
+ * The schedule attributes still describe the periods as scheduled.
+ */
+function skippedUntil(view) {
+  const n = view.schedule?.next;
+  return n?.end ? `${n.end}${n.tomorrow ? ' tomorrow' : ''}` : null;
+}
+
 /** One line describing what the entity is doing, e.g. "Boost · 42:10 left". */
 export function statusLine(view) {
   if (view.unavailable) return 'Unavailable';
@@ -293,7 +306,11 @@ export function statusLine(view) {
     return view.boost.secondsLeft != null ? `Boost · ${formatCountdown(view.boost.secondsLeft)} left` : 'Boost';
   }
   const parts = [];
-  if (view.override.active) {
+  if (view.override.active && view.override.skipped) {
+    const until = skippedUntil(view);
+    const temp = view.override.temperature != null ? ` · ${formatTemp(view.override.temperature, view.unit, { withUnit: true })}` : '';
+    parts.push(`Skipped${temp}${until ? ` until ${until}` : ''}`);
+  } else if (view.override.active) {
     const until = view.schedule?.current?.end;
     parts.push(until ? `Manual until ${until}` : 'Manual');
   } else if (view.schedule?.current) {
@@ -783,7 +800,8 @@ export class HeatingRoomCard extends HeatingBaseCard {
         : globalSummary(view);
 
     const info = [];
-    if (config.show_schedule !== false && view.schedule?.next && !view.away) {
+    // Skipped: the next period is the one it's on already
+    if (config.show_schedule !== false && view.schedule?.next && !view.away && !view.override.skipped) {
       const n = view.schedule.next;
       info.push(`<span title="Next schedule period"><ha-icon icon="mdi:calendar-clock"></ha-icon>${n.tomorrow ? 'Tomorrow ' : ''}${escapeHtml(n.start)} → ${formatTemp(n.temperature, unit, { withUnit: true })}</span>`);
     }
@@ -953,6 +971,7 @@ export class HeatingZoneCard extends HeatingBaseCard {
         away: view.away,
         unavailable: view.unavailable,
         override: view.override.active,
+        skipped: view.override.active && view.override.skipped,
         boost,
         endMs: boost ? endMs : null,
         sensorsStale: view.sensorsStale,
@@ -972,12 +991,16 @@ export class HeatingZoneCard extends HeatingBaseCard {
     const nowTemp = zone.override.active ? zone.override.temperature
       : sched?.current ? sched.current.temperature : sched?.temperature;
     const nowLabel = zone.override.active ? 'Manual' : 'Now';
+    const skipped = zone.override.active && zone.override.skipped && !zone.away;
+    const until = skipped ? skippedUntil(zone) : null;
     const now = zone.away ? 'Away · frost protection'
+      : skipped ? `Skipped to ${formatTemp(zone.override.temperature, unit, { withUnit: true })}${until ? ` until ${escapeHtml(until)}` : ''}`
       : nowTemp != null
         ? `${nowLabel} ${formatTemp(nowTemp, unit, { withUnit: true })}${sched?.current?.end ? ` until ${escapeHtml(sched.current.end)}` : ''}`
         : '';
     const n = sched?.next;
-    const next = n && !zone.away
+    // Skipped: it's on the next period already
+    const next = n && !zone.away && !skipped
       ? `Next ${formatTemp(n.temperature, unit, { withUnit: true })} ${n.end ? `until ${escapeHtml(n.end)}` : `from ${escapeHtml(n.start)}`}${n.tomorrow ? ' tomorrow' : ''}`
       : '';
     const demand = zoneDemand(zone);
@@ -987,7 +1010,7 @@ export class HeatingZoneCard extends HeatingBaseCard {
       const icon = r.off ? 'mdi:power' : boosted ? 'mdi:rocket-launch' : r.heating ? 'mdi:fire' : 'mdi:thermometer';
       const iconClass = r.off ? 'off' : r.heating || boosted ? 'heating' : '';
       let status = r.unavailable ? 'Unavailable' : r.off ? 'Off' : r.away ? 'Away' : r.heating ? 'Heating' : 'Idle';
-      if (r.override && !r.boost && !r.off) status += ' · manual';
+      if (r.override && !r.boost && !r.off) status += r.skipped ? ' · skipped' : ' · manual';
       if (r.sensorsStale) status += ` · ${r.sensorsStale} sensor${r.sensorsStale === 1 ? '' : 's'} not reporting`;
       const statusHtml = boosted && r.endMs
         ? `<span data-countdown="${r.endMs}" data-prefix="Boost · " data-suffix=" left">Boost · ${formatCountdown((r.endMs - Date.now()) / 1000)} left</span>`

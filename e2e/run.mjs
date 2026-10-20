@@ -414,6 +414,27 @@ async function main() {
       await waitFor(async () => /^Schedule until/.test(await kitchenCard.locator('.status').textContent()), 'the card to say Schedule', 20000, 250);
     });
 
+    await step('skips the zone to its next temperature in the dialog, and the cards say so (Heating Manager 3.12+)', async () => {
+      if (BACKEND_VERSION < 312) return; // skip_to_next is a room and zone preset from 3.12
+      const zone = page.locator('heating-zone-card');
+      await openDialog(zone, 'Downstairs');
+      await choose('Preset', 'Skip to next');
+      await waitFor(async () => (await getState(token, 'climate.downstairs')).attributes.manual_override.skipped === true,
+        'the zone to skip', 20000, 250);
+      await closeDialog();
+      await waitFor(async () => /^Skipped to [\d.]+°C/.test(await zone.locator('.sub.now').textContent()), 'the zone card to say Skipped', 20000, 250);
+      assert.equal(await zone.locator('.sub.next').count(), 0);
+      await waitFor(async () => /^Skipped · [\d.]+°C/.test(await kitchenCard.locator('.status').textContent()), 'the kitchen to say Skipped', 20000, 250);
+      assert.match(await zone.locator('.row', { hasText: 'Kitchen' }).locator('.rstatus').textContent(), /· skipped$/);
+      await page.screenshot({ path: join(SHOTS, 'skipped.png'), fullPage: true });
+      await openDialog(zone, 'Downstairs');
+      await choose('Preset', 'Schedule');
+      await waitFor(async () => !(await getState(token, 'climate.downstairs')).attributes.manual_override.active,
+        'the skip to end', 20000, 250);
+      await closeDialog();
+      await waitFor(async () => /^Now /.test(await zone.locator('.sub.now').textContent()), 'the zone card back on the schedule', 20000, 250);
+    });
+
     await step('turns a boosted room off and on in the dialog', async () => {
       await openDialog(loungeCard, 'Downstairs Lounge');
       await choose('Mode', 'Off');

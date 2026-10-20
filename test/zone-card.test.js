@@ -163,6 +163,28 @@ describe('zone card', () => {
     expect(button(el, 'schedule')).toBeNull();
   });
 
+  it('a zone skipped to its next scheduled temperature, and its rooms', () => {
+    let hass = withState(makeHass(), ZONE, {
+      attributes: { preset_mode: 'skip_to_next', manual_override: { active: true, temperature: 21, skipped: true } },
+    });
+    hass = withState(hass, HALL, {
+      attributes: { preset_mode: 'skip_to_next', manual_override: { active: true, temperature: 21, skipped: true, from_zone: true } },
+    });
+    const el = mount(TAG, { entity: ZONE }, hass);
+    // On the next period already: no Next line
+    expect($$(el, '.title .sub:not([style])').map(text)).toEqual(['Skipped to 21.0°C until 22:30']);
+    expect(rows(el)[0].status).toBe('Idle · skipped');
+    expect(rows(el)[1].status).toBe('Heating · manual');
+  });
+
+  it('a skipped zone in away mode shows away', () => {
+    const hass = withState(makeHass('v3.2.0-away'), ZONE, {
+      attributes: { manual_override: { active: true, temperature: 21, skipped: true } },
+    });
+    const el = mount(TAG, { entity: ZONE }, hass);
+    expect($$(el, '.title .sub:not([style])').map(text)).toEqual(['Away · frost protection']);
+  });
+
   it('needs a zone', () => {
     const el = mount(TAG, { entity: ROOM }, makeHass());
     expect(text($(el, '.warning'))).toContain('climate.downstairs_lounge is a room');

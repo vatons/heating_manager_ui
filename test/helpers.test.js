@@ -158,6 +158,13 @@ suite('describe', () => {
     expect(heatingChip(view)).toMatchObject({ label: 'Heating', level: 'heating' });
   });
 
+  it('reads the trend from current.trend (Heating Manager 3.6+)', () => {
+    const hass = withState(makeHass(), ROOM, {
+      attributes: { heating_analytics: { current: { trend: 'cooling_slowly' }, estimated_time_to_target: {} } },
+    });
+    expect(describe(hass, hass.states[ROOM], now).trend).toMatchObject({ label: 'Cooling', dir: 'down' });
+  });
+
   it('a room switched off', () => {
     const hass = makeHass();
     const view = describe(hass, hass.states[STUDY], now);
@@ -169,8 +176,37 @@ suite('describe', () => {
   it('a room with a manual temperature', () => {
     const hass = makeHass();
     const view = describe(hass, hass.states[KITCHEN], now);
-    expect(view.override).toEqual({ active: true, temperature: 19.5 });
+    expect(view.override).toEqual({ active: true, temperature: 19.5, skipped: false });
     expect(statusLine(view)).toBe('Manual until 17:00');
+  });
+
+  it('a room skipped to its next scheduled temperature (Heating Manager 3.11+)', () => {
+    const hass = withState(makeHass(), KITCHEN, {
+      attributes: { preset_mode: 'skip_to_next', manual_override: { active: true, temperature: 21, skipped: true, from_zone: false } },
+    });
+    const view = describe(hass, hass.states[KITCHEN], now);
+    expect(view.override).toEqual({ active: true, temperature: 21, skipped: true });
+    // On the 17:00 period already, so until the one after it
+    expect(statusLine(view)).toBe('Skipped · 21.0°C until 22:30');
+  });
+
+  it('the whole house with a zone skipped says so from its preset', () => {
+    const hass = withState(makeHass(), GLOBAL, {
+      attributes: { preset_mode: 'skip_to_next', manual_override: { active: true, zones: ['downstairs'] }, boost: { active: false, room_ids: [] } },
+    });
+    const view = describe(hass, hass.states[GLOBAL], now);
+    expect(statusLine(view)).toBe('Skipped');
+  });
+
+  it('a skip without an end time (Heating Manager 3.7+ has none for the next period)', () => {
+    let hass = withState(makeHass(), KITCHEN, {
+      attributes: { manual_override: { active: true, temperature: 21, skipped: true } },
+    });
+    const zone = hass.states[ZONE].attributes.schedule;
+    hass = withState(hass, ZONE, {
+      attributes: { schedule: { ...zone, next_period: { start: '17:00', temperature: 21 } } },
+    });
+    expect(statusLine(describe(hass, hass.states[KITCHEN], now))).toBe('Skipped · 21.0°C');
   });
 
   it('a room without sensors cannot be boosted', () => {

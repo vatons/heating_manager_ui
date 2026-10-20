@@ -45,7 +45,7 @@ Version 2 of the cards works with the entities Heating Manager 3.x creates (`cli
 ![Room, zone and whole-house cards](docs/dashboard.png)
 
 - **Temperature** and **target**.
-- **Status**: what the room is following, such as `Schedule until 17:00`, `Manual until 17:00`, `Boost · 42:10 left to 21.0°C`, `Away · frost protection` or `Off`.
+- **Status**: what the room is following, such as `Schedule until 17:00`, `Manual until 17:00`, `Skipped · 20.0°C` (skipped to the next scheduled temperature, Heating Manager 3.11+), `Boost · 42:10 left to 21.0°C`, `Away · frost protection` or `Off`.
 - **Chip**: `Heating`, `Idle`, `Off`, or `Monitoring` for rooms in a monitoring-only zone.
 - **Details**: the next schedule change, the temperature trend, the time to reach the target when the room is heating (`rough estimate` when the integration's confidence is under 50%), sensors that have stopped reporting, and `Using TRV temperature` for rooms without a sensor.
 - **Boost** starts a boost for the room's boost duration (its **Boost duration** setting, from Heating Manager 3.3, or the card's `boost_duration`); **Cancel boost** ends it. Rooms without a temperature sensor can't be boosted, so the button is disabled there. Boosting a room that's off turns it back on.
@@ -57,6 +57,7 @@ The boost shows on the card straight away. Heating Manager refreshes at most eve
 - change the target (a manual temperature until the schedule changes),
 - switch the room off or back on (**Mode**: Heat / Off),
 - go back to the schedule (**Preset**: Schedule, which clears a manual temperature or a boost; needs Heating Manager 3.4).
+- skip to the next scheduled temperature now (**Preset**: Skip to next; needs Heating Manager 3.12).
 
 Choose **Away** in the whole house's dialog, not a room's: it's for every zone.
 

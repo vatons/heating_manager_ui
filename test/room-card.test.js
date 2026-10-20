@@ -254,6 +254,22 @@ describe('everything else is in the more-info dialog', () => {
     expect(button(el, 'schedule')).toBeNull();
   });
 
+  it('says a room is skipped, without the change it skipped to', () => {
+    const hass = withState(makeHass(), KITCHEN, {
+      attributes: { preset_mode: 'skip_to_next', manual_override: { active: true, temperature: 21, skipped: true, from_zone: true } },
+    });
+    const el = mount(TAG, { entity: KITCHEN }, hass);
+    expect(text($(el, '.status'))).toBe('Skipped · 21.0°C until 22:30');
+    expect(text($(el, '.info') || { textContent: '' })).not.toContain('→');
+  });
+
+  it('a skipped room in °F', () => {
+    const hass = withState(makeHass('v3.2.0-fahrenheit'), KITCHEN, {
+      attributes: { manual_override: { active: true, temperature: 21, skipped: true } },
+    });
+    expect(text($(mount(TAG, { entity: KITCHEN }, hass), '.status'))).toBe('Skipped · 70°F until 22:30');
+  });
+
   it('opens the rest on tap, without a hint', () => {
     const el = mount(TAG, { entity: KITCHEN }, makeHass());
     const events = captureEvents(el, 'hass-action');

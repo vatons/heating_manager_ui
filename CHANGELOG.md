@@ -5,6 +5,14 @@ All notable changes to the Heating Manager cards (formerly Heating Room Card) wi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-10-20
+
+### Added
+- Skip to next (Heating Manager 3.11+; Preset → Skip to next in a room's or zone's dialog from 3.12). The room card says `Skipped · 20.0°C`, the zone card `Skipped to 20.0°C` (without its Next line), and its rooms `· skipped`. The whole-house card says `Skipped` while a zone is.
+
+### Fixed
+- The temperature trend on the room card shows again with Heating Manager 3.6 and later, which moved it to `heating_analytics.current.trend`.
+
 ## [2.1.1] - 2026-10-11
 
 ### Changed

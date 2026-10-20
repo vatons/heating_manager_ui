@@ -215,7 +215,9 @@ async def test_states_celsius(hass: HomeAssistant, heating):
     assert room["state"] == "heat"
     assert room["attributes"]["room_id"] == "lounge"
     assert room["attributes"]["boost"]["duration_minutes"] == 60
-    assert room["attributes"]["heating_analytics"]["temperature_trend"]
+    analytics = room["attributes"]["heating_analytics"]
+    # The card reads either: current.trend from Heating Manager 3.6
+    assert (analytics.get("current") or {}).get("trend") or analytics.get("temperature_trend")
     assert data["states"][ROOM_OFF]["state"] == "off"
     assert data["states"][ZONE]["attributes"]["schedule"]["current_period"]["start"] == "09:00"
     assert data["states"][GLOBAL]["attributes"]["total_zones"] == 2
