@@ -423,6 +423,11 @@ async function main() {
         'the zone to skip', 20000, 250);
       await closeDialog();
       await waitFor(async () => /^Skipped to [\d.]+°C/.test(await zone.locator('.sub.now').textContent()), 'the zone card to say Skipped', 20000, 250);
+      if (BACKEND_VERSION >= 313) {
+        // until on manual_override says when the skip ends
+        const { until } = (await getState(token, 'climate.downstairs')).attributes.manual_override;
+        assert.match(await zone.locator('.sub.now').textContent(), new RegExp(`until ${until}( tomorrow)?$`));
+      }
       assert.equal(await zone.locator('.sub.next').count(), 0);
       await waitFor(async () => /^Skipped · [\d.]+°C/.test(await kitchenCard.locator('.status').textContent()), 'the kitchen to say Skipped', 20000, 250);
       assert.match(await zone.locator('.row', { hasText: 'Kitchen' }).locator('.rstatus').textContent(), /· skipped$/);

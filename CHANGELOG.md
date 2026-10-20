@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Skip to next (Heating Manager 3.11+; Preset → Skip to next in a room's or zone's dialog from 3.12). The room card says `Skipped · 20.0°C`, the zone card `Skipped to 20.0°C` (without its Next line), and its rooms `· skipped`. The whole-house card says `Skipped` while a zone is.
+- With Heating Manager 3.13+, skips and manual temperatures say when they end, from `manual_override.until`: `Skipped · 20.0°C until 12:00 tomorrow`, `Manual until 18:15`.
 
 ### Fixed
 - The temperature trend on the room card shows again with Heating Manager 3.6 and later, which moved it to `heating_analytics.current.trend`.

@@ -177,6 +177,21 @@ describe('zone card', () => {
     expect(rows(el)[1].status).toBe('Heating · manual');
   });
 
+  it('a skipped zone says until when, from until (Heating Manager 3.13+)', () => {
+    const hass = withState(makeHass(), ZONE, {
+      attributes: { manual_override: { active: true, temperature: 21, skipped: true, until: '23:00', until_tomorrow: false } },
+    });
+    const el = mount(TAG, { entity: ZONE }, hass);
+    expect(text($(el, '.sub.now'))).toBe('Skipped to 21.0°C until 23:00');
+  });
+
+  it('a zone manual temperature says until when, from until', () => {
+    const hass = withState(makeHass(), ZONE, {
+      attributes: { manual_override: { active: true, temperature: 21, until: '07:00', until_tomorrow: true } },
+    });
+    expect(text($(mount(TAG, { entity: ZONE }, hass), '.sub.now'))).toBe('Manual 21.0°C until 07:00 tomorrow');
+  });
+
   it('a skipped zone in away mode shows away', () => {
     const hass = withState(makeHass('v3.2.0-away'), ZONE, {
       attributes: { manual_override: { active: true, temperature: 21, skipped: true } },

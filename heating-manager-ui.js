@@ -203,7 +203,7 @@ export function describe(hass, stateObj, now = Date.now()) {
     away,
     monitoringOnly: false,
     boost: { active: false, secondsLeft: null, endTime: null, temperature: null, rooms: [] },
-    override: { active: false, temperature: null, skipped: false },
+    override: { active: false, temperature: null, skipped: false, until: null },
     canBoost: false,
     sensorsMissing: false,
     sensorsStale: 0,
@@ -271,6 +271,8 @@ export function describe(hass, stateObj, now = Date.now()) {
     // Skipped to the next scheduled temperature (Heating Manager 3.11+). The whole
     // house says so only in its preset.
     view.override.skipped = override.skipped === true || a.preset_mode === 'skip_to_next';
+    // When it ends (Heating Manager 3.13+)
+    if (override.until) view.override.until = `${override.until}${override.until_tomorrow ? ' tomorrow' : ''}`;
   }
   return view;
 }
@@ -293,6 +295,7 @@ function scheduleInfo(schedule, unit) {
  * The schedule attributes still describe the periods as scheduled.
  */
 function skippedUntil(view) {
+  if (view.override.until) return view.override.until;
   const n = view.schedule?.next;
   return n?.end ? `${n.end}${n.tomorrow ? ' tomorrow' : ''}` : null;
 }
@@ -311,7 +314,7 @@ export function statusLine(view) {
     const temp = view.override.temperature != null ? ` · ${formatTemp(view.override.temperature, view.unit, { withUnit: true })}` : '';
     parts.push(`Skipped${temp}${until ? ` until ${until}` : ''}`);
   } else if (view.override.active) {
-    const until = view.schedule?.current?.end;
+    const until = view.override.until ?? view.schedule?.current?.end;
     parts.push(until ? `Manual until ${until}` : 'Manual');
   } else if (view.schedule?.current) {
     parts.push(`Schedule until ${view.schedule.current.end}`);
@@ -993,10 +996,11 @@ export class HeatingZoneCard extends HeatingBaseCard {
     const nowLabel = zone.override.active ? 'Manual' : 'Now';
     const skipped = zone.override.active && zone.override.skipped && !zone.away;
     const until = skipped ? skippedUntil(zone) : null;
+    const nowUntil = zone.override.active ? zone.override.until ?? sched?.current?.end : sched?.current?.end;
     const now = zone.away ? 'Away · frost protection'
       : skipped ? `Skipped to ${formatTemp(zone.override.temperature, unit, { withUnit: true })}${until ? ` until ${escapeHtml(until)}` : ''}`
       : nowTemp != null
-        ? `${nowLabel} ${formatTemp(nowTemp, unit, { withUnit: true })}${sched?.current?.end ? ` until ${escapeHtml(sched.current.end)}` : ''}`
+        ? `${nowLabel} ${formatTemp(nowTemp, unit, { withUnit: true })}${nowUntil ? ` until ${escapeHtml(nowUntil)}` : ''}`
         : '';
     const n = sched?.next;
     // Skipped: it's on the next period already

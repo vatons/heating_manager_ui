@@ -176,7 +176,7 @@ suite('describe', () => {
   it('a room with a manual temperature', () => {
     const hass = makeHass();
     const view = describe(hass, hass.states[KITCHEN], now);
-    expect(view.override).toEqual({ active: true, temperature: 19.5, skipped: false });
+    expect(view.override).toEqual({ active: true, temperature: 19.5, skipped: false, until: null });
     expect(statusLine(view)).toBe('Manual until 17:00');
   });
 
@@ -185,9 +185,20 @@ suite('describe', () => {
       attributes: { preset_mode: 'skip_to_next', manual_override: { active: true, temperature: 21, skipped: true, from_zone: false } },
     });
     const view = describe(hass, hass.states[KITCHEN], now);
-    expect(view.override).toEqual({ active: true, temperature: 21, skipped: true });
+    expect(view.override).toEqual({ active: true, temperature: 21, skipped: true, until: null });
     // On the 17:00 period already, so until the one after it
     expect(statusLine(view)).toBe('Skipped · 21.0°C until 22:30');
+  });
+
+  it('says when a skip or manual temperature ends from until (Heating Manager 3.13+)', () => {
+    let hass = withState(makeHass(), KITCHEN, {
+      attributes: { manual_override: { active: true, temperature: 21, skipped: true, until: '06:30', until_tomorrow: true } },
+    });
+    expect(statusLine(describe(hass, hass.states[KITCHEN], now))).toBe('Skipped · 21.0°C until 06:30 tomorrow');
+    hass = withState(makeHass(), KITCHEN, {
+      attributes: { manual_override: { active: true, temperature: 19.5, skipped: false, until: '18:15', until_tomorrow: false } },
+    });
+    expect(statusLine(describe(hass, hass.states[KITCHEN], now))).toBe('Manual until 18:15');
   });
 
   it('the whole house with a zone skipped says so from its preset', () => {
