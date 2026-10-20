@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { HeatingZoneCard } from '../heating-manager-ui.js';
 import {
   $, $$, FIXTURE_NOW, HALL, KITCHEN, ROOM, STUDY, UPSTAIRS, ZONE,
-  button, captureEvents, click, flush, makeHass, mount, text, withState,
+  button, captureEvents, click, flush, makeHass, mount, text, withSkip, withState,
 } from './helpers.js';
 
 const TAG = 'heating-zone-card';
@@ -190,6 +190,18 @@ describe('zone card', () => {
       attributes: { manual_override: { active: true, temperature: 21, until: '07:00', until_tomorrow: true } },
     });
     expect(text($(mount(TAG, { entity: ZONE }, hass), '.sub.now'))).toBe('Manual 21.0°C until 07:00 tomorrow');
+  });
+
+  it('Skip skips the zone, showing it straight away (Heating Manager 3.12+)', async () => {
+    const hass = withSkip(makeHass());
+    const el = mount(TAG, { entity: ZONE }, hass);
+    expect($$(el, '[data-action]').map((b) => b.dataset.action)).toEqual(['boost', 'skip']);
+    click(button(el, 'skip'));
+    expect(hass.callService).toHaveBeenCalledWith('climate', 'set_preset_mode', { preset_mode: 'skip_to_next' },
+      { entity_id: ZONE }, false);
+    await flush();
+    expect($$(el, '.title .sub:not([style])').map(text)).toEqual(['Skipped to 21.0°C until 22:30']);
+    expect(text(button(el, 'skip'))).toBe('Skipped');
   });
 
   it('a skipped zone in away mode shows away', () => {

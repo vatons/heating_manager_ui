@@ -54,6 +54,15 @@ export function withState(hass, entityId, { state, attributes } = {}) {
   };
 }
 
+/** Offer Skip to next on every room, zone and the house, as Heating Manager 3.12+ does. */
+export function withSkip(hass) {
+  const states = Object.fromEntries(Object.entries(hass.states).map(([id, st]) => [id,
+    Array.isArray(st.attributes?.preset_modes) && st.attributes.zone_id !== undefined || st.attributes?.total_zones !== undefined
+      ? { ...st, attributes: { ...st.attributes, preset_modes: [...new Set([...(st.attributes.preset_modes || []), 'skip_to_next'])] } }
+      : st]));
+  return { ...hass, states };
+}
+
 /** Add the room's boost duration entity (Heating Manager 3.3+), as its device would have it. */
 export function withRoomDuration(hass, roomEntityId, minutes) {
   const room = roomEntityId.split('.')[1];

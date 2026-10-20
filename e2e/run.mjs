@@ -373,8 +373,9 @@ async function main() {
       assert.equal(await loungeCard.locator('[data-action="boost"]').getAttribute('aria-pressed'), 'true');
     });
 
-    await step('the cards offer only Boost, without hints', async () => {
-      assert.deepEqual(await kitchenCard.locator('[data-action]').evaluateAll((els) => els.map((e) => e.dataset.action)), ['boost']);
+    await step('the cards offer only Boost (and Skip from Heating Manager 3.12), without hints', async () => {
+      assert.deepEqual(await kitchenCard.locator('[data-action]').evaluateAll((els) => els.map((e) => e.dataset.action)),
+        BACKEND_VERSION >= 312 ? ['boost', 'skip'] : ['boost']);
       assert.equal(await page.locator('heating-room-card .hint, heating-zone-card .hint').count(), 0);
       assert.equal(await page.locator('heating-zone-card .row button').count(), 0);
     });
@@ -411,6 +412,21 @@ async function main() {
       await waitFor(async () => !(await getState(token, 'climate.downstairs_kitchen')).attributes.manual_override.active,
         'the manual temperature to clear', 20000, 250);
       await closeDialog();
+      await waitFor(async () => /^Schedule until/.test(await kitchenCard.locator('.status').textContent()), 'the card to say Schedule', 20000, 250);
+    });
+
+    await step('Skip on a room card skips it, and pressed again goes back to the schedule (Heating Manager 3.12+)', async () => {
+      if (BACKEND_VERSION < 312) return;
+      const skip = kitchenCard.locator('[data-action="skip"]');
+      await skip.click();
+      await waitFor(async () => (await getState(token, 'climate.downstairs_kitchen')).attributes.manual_override.skipped === true,
+        'the kitchen to skip', 20000, 250);
+      await waitFor(async () => /^Skipped · [\d.]+°C until /.test(await kitchenCard.locator('.status').textContent()), 'the card to say Skipped', 20000, 250);
+      assert.equal(await skip.getAttribute('aria-pressed'), 'true');
+      await page.screenshot({ path: join(SHOTS, 'skip-button.png'), fullPage: true });
+      await skip.click();
+      await waitFor(async () => !(await getState(token, 'climate.downstairs_kitchen')).attributes.manual_override.active,
+        'the kitchen back on the schedule', 20000, 250);
       await waitFor(async () => /^Schedule until/.test(await kitchenCard.locator('.status').textContent()), 'the card to say Schedule', 20000, 250);
     });
 
@@ -516,7 +532,7 @@ async function main() {
       assert.equal(await preview.textContent(), 'Kitchen');
       // Turning a switch in the visual editor updates the preview
       await editor.getByText('Display', { exact: true }).first().click();
-      await editor.getByText('Show the Boost button').first().waitFor({ timeout: 15000 });
+      await editor.getByText('Show the Boost and Skip buttons').first().waitFor({ timeout: 15000 });
       await page.screenshot({ path: join(SHOTS, 'card-editor-display.png') });
       await editor.locator('ha-switch').first().click();
       await waitFor(async () => (await page.locator('hui-dialog-edit-card heating-room-card .actions').count()) === 0,

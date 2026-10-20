@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { HeatingRoomCard, OPTIMISTIC_TIMEOUT_MS } from '../heating-manager-ui.js';
 import {
   $, $$, BATHROOM, FIXTURE_NOW, GLOBAL, HALL, KITCHEN, ROOM, STUDY, TRV, ZONE,
-  button, captureEvents, click, flush, makeHass, mount, text, withRoomDuration, withState,
+  button, captureEvents, click, flush, makeHass, mount, text, withRoomDuration, withSkip, withState,
 } from './helpers.js';
 
 const TAG = 'heating-room-card';
@@ -261,6 +261,84 @@ describe('everything else is in the more-info dialog', () => {
     const el = mount(TAG, { entity: KITCHEN }, hass);
     expect(text($(el, '.status'))).toBe('Skipped · 21.0°C until 22:30');
     expect(text($(el, '.info') || { textContent: '' })).not.toContain('→');
+  });
+
+  describe('Skip (Heating Manager 3.12+)', () => {
+    it('isn\u2019t there before Heating Manager 3.12', () => {
+      expect(button(mount(TAG, { entity: KITCHEN }, makeHass()), 'skip')).toBeNull();
+    });
+
+    it('skips to the next scheduled temperature, showing it straight away', async () => {
+      const hass = withSkip(makeHass());
+      const el = mount(TAG, { entity: KITCHEN }, hass);
+      const skip = button(el, 'skip');
+      expect(text(skip)).toBe('Skip');
+      expect(skip.getAttribute('title')).toBe('Skip to 21.0°C now, the next scheduled temperature');
+      click(skip);
+      expect(hass.callService).toHaveBeenCalledWith('climate', 'set_preset_mode', { preset_mode: 'skip_to_next' },
+        { entity_id: KITCHEN }, false);
+      await flush();
+      expect(text($(el, '.status'))).toBe('Skipped · 21.0°C until 22:30');
+      expect(text(button(el, 'skip'))).toBe('Skipped');
+      expect(button(el, 'skip').getAttribute('aria-pressed')).toBe('true');
+    });
+
+    it('while skipped, goes back to the schedule', () => {
+      const hass = withState(withSkip(makeHass()), KITCHEN, {
+        attributes: { preset_mode: 'skip_to_next', manual_override: { active: true, temperature: 21, skipped: true, until: '22:30' } },
+      });
+      const el = mount(TAG, { entity: KITCHEN }, hass);
+      expect(button(el, 'skip').getAttribute('title')).toBe('Back to the schedule');
+      click(button(el, 'skip'));
+      expect(hass.callService).toHaveBeenCalledWith('climate', 'set_preset_mode', { preset_mode: 'schedule' },
+        { entity_id: KITCHEN }, false);
+    });
+
+    it('a skip ends the boost on the card too', async () => {
+      const el = mount(TAG, { entity: ROOM }, withSkip(makeHass()));
+      expect(button(el, 'boost').getAttribute('aria-pressed')).toBe('true');
+      click(button(el, 'skip'));
+      await flush();
+      expect(button(el, 'boost').getAttribute('aria-pressed')).toBe('false');
+      expect(text($(el, '.status'))).toMatch(/^Skipped/);
+    });
+
+    it('goes back if Home Assistant rejects it', async () => {
+      const hass = withSkip(makeHass());
+      hass.callService.mockRejectedValueOnce(new Error('No schedule change to skip to'));
+      const el = mount(TAG, { entity: KITCHEN }, hass);
+      const errors = captureEvents(el, 'hass-notification');
+      click(button(el, 'skip'));
+      await flush();
+      await flush();
+      expect(text($(el, '.status'))).toBe('Manual until 17:00');
+      expect(errors[0].detail.message).toContain('No schedule change to skip to');
+    });
+
+    it('is disabled when off, in away mode, or with nothing to skip to', () => {
+      const hass = withSkip(makeHass());
+      expect(button(mount(TAG, { entity: STUDY }, hass), 'skip').disabled).toBe(true);
+      const away = withSkip(makeHass('v3.2.0-away'));
+      expect(button(mount(TAG, { entity: KITCHEN }, away), 'skip').disabled).toBe(true);
+      const zone = hass.states[ZONE].attributes.schedule;
+      const flat = withState(hass, ZONE, { attributes: { schedule: { ...zone, next_period: null } } });
+      const el = mount(TAG, { entity: KITCHEN }, flat);
+      expect(button(el, 'skip').disabled).toBe(true);
+      expect(button(el, 'skip').getAttribute('title')).toBe('No schedule change to skip to');
+    });
+
+    it('hides with the Boost button', () => {
+      expect(button(mount(TAG, { entity: KITCHEN, show_controls: false }, withSkip(makeHass())), 'skip')).toBeNull();
+    });
+
+    it('on the whole house skips every zone', () => {
+      const hass = withSkip(makeHass());
+      const el = mount(TAG, { entity: GLOBAL }, hass);
+      expect(button(el, 'skip').getAttribute('title')).toBe('Skip every zone to its next scheduled temperature now');
+      click(button(el, 'skip'));
+      expect(hass.callService).toHaveBeenCalledWith('climate', 'set_preset_mode', { preset_mode: 'skip_to_next' },
+        { entity_id: GLOBAL }, false);
+    });
   });
 
   it('a skipped room in °F', () => {

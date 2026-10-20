@@ -205,6 +205,8 @@ export function describe(hass, stateObj, now = Date.now()) {
     boost: { active: false, secondsLeft: null, endTime: null, temperature: null, rooms: [] },
     override: { active: false, temperature: null, skipped: false, until: null },
     canBoost: false,
+    // Skip to next is a preset (rooms and zones from Heating Manager 3.12, the house from 3.11)
+    canSkip: Array.isArray(a.preset_modes) && a.preset_modes.includes('skip_to_next'),
     sensorsMissing: false,
     sensorsStale: 0,
     hold: null,
@@ -288,6 +290,32 @@ function scheduleInfo(schedule, unit) {
     current: period(schedule.current_period),
     next: period(schedule.next_period),
   };
+}
+
+/** The Skip button: skips to the next scheduled temperature, or while skipped goes back to the schedule. */
+function skipButton(view, busy) {
+  const skipped = view.override.active && view.override.skipped;
+  const next = view.schedule?.next;
+  // Nothing to skip to (the house has no schedule of its own: its zones' are checked by the integration)
+  const nothing = view.kind !== 'global' && !next;
+  const disabled = busy || (!skipped && (view.away || view.off || nothing));
+  const title = skipped ? 'Back to the schedule'
+    : view.away ? 'Not in away mode'
+      : view.off ? 'The room is off'
+        : nothing ? 'No schedule change to skip to'
+          : next ? `Skip to ${formatTemp(next.temperature, view.unit, { withUnit: true })} now, the next scheduled temperature`
+            : 'Skip every zone to its next scheduled temperature now';
+  return `<button class="action ${skipped ? 'on' : ''} ${busy ? 'busy' : ''}" data-action="skip" ${disabled ? 'disabled' : ''}
+    title="${title}" aria-label="${title}" aria-pressed="${skipped}"><ha-icon icon="mdi:skip-next"></ha-icon>${skipped ? 'Skipped' : 'Skip'}</button>`;
+}
+
+/** What a skip looks like before the entity reports it. */
+function applySkip(view, skipped) {
+  if (skipped === (view.override.active && view.override.skipped)) return;
+  view.override = skipped
+    ? { active: true, skipped: true, temperature: view.schedule?.next?.temperature ?? null, until: null }
+    : { active: false, skipped: false, temperature: null, until: null };
+  if (skipped && view.kind === 'room') view.boost.active = false;
 }
 
 /**
@@ -380,7 +408,7 @@ const STYLES = `
     --hm-radius: var(--ha-card-border-radius, 12px);
     display: block;
   }
-  ha-card { height: 100%; overflow: hidden; position: relative; }
+  ha-card { height: 100%; overflow: hidden; position: relative; container: hm-card / inline-size; }
   ha-card.unavailable { opacity: 0.6; }
   .bar { position: absolute; top: 0; left: 0; right: 0; height: 4px; background: var(--hm-off); opacity: 0.4; }
   .bar.heating {
@@ -423,7 +451,9 @@ const STYLES = `
   .info .warn { color: var(--hm-warn); }
   /* The chip, with Boost under it, top right */
   .side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; }
-  .actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+  /* Stacked under the chip, so a narrow card keeps room for its name; side by side when it's wide */
+  .actions { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+  @container hm-card (min-width: 400px) { .actions { flex-direction: row; } }
   /* The same size as the chip (its 1px border comes out of the padding) */
   .side .action { height: auto; padding: 1px 7px 1px 5px; gap: 4px; border-radius: 12px; font-size: 12px; }
   .side .action ha-icon { --mdc-icon-size: 16px; }
@@ -432,6 +462,7 @@ const STYLES = `
     cursor: pointer; font-size: 14px; font-weight: 500; color: var(--primary-text-color); }
   .action ha-icon { --mdc-icon-size: 18px; }
   .action:hover:not([disabled]) { background: var(--secondary-background-color, rgba(127,127,127,0.12)); }
+  .action.on:hover:not([disabled]) { background: var(--hm-boost); filter: brightness(0.92); }
   .action[disabled] { opacity: 0.4; cursor: default; }
   .action.on { background: var(--hm-boost); border-color: var(--hm-boost); color: var(--text-primary-color, #fff); }
   .action.busy { opacity: 0.7; }
@@ -541,6 +572,19 @@ class HeatingBaseCard extends HTMLElement {
   /** Boost length for countdowns before the entity reports its end time. */
   _boostMinutes(entityId = this._config.entity) {
     return Number(this._config.boost_duration) || roomBoostDuration(this._hass, entityId) || 30;
+  }
+
+  /** Skip to the next scheduled temperature, or while skipped, back to the schedule. */
+  async _toggleSkip(view) {
+    const turnOn = !(view.override.active && view.override.skipped);
+    this._setOptimistic('skip', turnOn);
+    this._update();
+    const ok = await this._call(turnOn ? `skip ${view.name} to its next temperature` : `put ${view.name} back on the schedule`,
+      'climate', 'set_preset_mode', { preset_mode: turnOn ? 'skip_to_next' : 'schedule' }, undefined, 'skip');
+    if (!ok) {
+      this._clearOptimistic('skip');
+      this._update();
+    }
   }
 
   // -- Service calls -------------------------------------------------------
@@ -772,6 +816,7 @@ export class HeatingRoomCard extends HeatingBaseCard {
     } else {
       view.boost.active = this._resolve('boost', view.boost.active);
     }
+    applySkip(view, this._resolve('skip', view.override.active && view.override.skipped));
     // Countdowns are drawn live from the end time; seconds left would re-render every second
     view.boost.endMs = view.kind === 'room' && view.boost.active && view.boost.endTime
       ? new Date(view.boost.endTime).getTime() : null;
@@ -839,6 +884,7 @@ export class HeatingRoomCard extends HeatingBaseCard {
         actions.push(`<button class="action ${view.boost.active ? 'on' : ''}" data-action="boost" ${busy.boost || (view.away && !view.boost.active) ? 'disabled' : ''}
           title="${title}" aria-pressed="${view.boost.active}"><ha-icon icon="mdi:rocket-launch"></ha-icon>${label}</button>`);
       }
+      if (view.canSkip) actions.push(skipButton(view, busy.skip));
     }
 
     const target = `<div class="target"><div class="target-value"><div class="label">Target</div>
@@ -870,7 +916,9 @@ export class HeatingRoomCard extends HeatingBaseCard {
   }
 
   _onButton(action) {
-    if (action === 'boost' && this._stateObj) this._toggleBoost(this._model().view);
+    if (!this._stateObj) return;
+    if (action === 'boost') this._toggleBoost(this._model().view);
+    if (action === 'skip') this._toggleSkip(this._model().view);
   }
 
   async _toggleBoost(view) {
@@ -960,6 +1008,7 @@ export class HeatingZoneCard extends HeatingBaseCard {
     const zone = describe(this._hass, stateObj);
     if (this._config.name) zone.name = this._config.name;
     zone.boost.active = this._resolve('boost', zone.boost.active);
+    applySkip(zone, this._resolve('skip', zone.override.active && zone.override.skipped));
     const rooms = roomsOfZone(this._hass, stateObj.attributes.zone_id, this._config.rooms).map((s) => {
       const view = describe(this._hass, s);
       const boost = view.boost.active;
@@ -1034,6 +1083,7 @@ export class HeatingZoneCard extends HeatingBaseCard {
         aria-pressed="${zone.boost.active}" title="${zone.boost.active ? 'Cancel every boost and manual temperature in this zone' : 'Boost every room with a sensor'}">
         <ha-icon icon="mdi:rocket-launch"></ha-icon>${zone.boost.active ? 'Cancel boosts' : 'Boost all'}</button>`);
     }
+    if (config.show_controls !== false && zone.canSkip && !zone.unavailable) actions.push(skipButton(zone, busy.skip));
 
     return `
       <ha-card class="${zone.unavailable ? 'unavailable' : ''}">
@@ -1058,7 +1108,9 @@ export class HeatingZoneCard extends HeatingBaseCard {
 
   _onButton(action) {
     const view = this._model();
-    if (!view.problem && action === 'boost') this._toggleZoneBoost(view.zone);
+    if (view.problem) return;
+    if (action === 'boost') this._toggleZoneBoost(view.zone);
+    if (action === 'skip') this._toggleSkip(view.zone);
   }
 
   async _toggleZoneBoost(zone) {
@@ -1083,7 +1135,7 @@ const ENTITY_FILTER = { integration: DOMAIN, domain: 'climate' };
 const LABELS = {
   entity: 'Room, zone or whole house',
   name: 'Name',
-  show_controls: 'Show the Boost button',
+  show_controls: 'Show the Boost and Skip buttons',
   show_schedule: 'Show the next schedule change',
   show_analytics: 'Show trend and time to target',
   boost_duration: 'Boost length (minutes)',
