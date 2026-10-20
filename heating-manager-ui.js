@@ -13,7 +13,7 @@
  * dependencies; both cards have a visual editor built on ha-form.
  */
 
-export const VERSION = '2.1.1';
+export const VERSION = '2.2.0';
 export const DOMAIN = 'heating_manager';
 
 // How long an optimistic change is shown before trusting the entity again. The
@@ -203,8 +203,10 @@ export function describe(hass, stateObj, now = Date.now()) {
     away,
     monitoringOnly: false,
     boost: { active: false, secondsLeft: null, endTime: null, temperature: null, rooms: [] },
-    override: { active: false, temperature: null },
+    override: { active: false, temperature: null, skipped: false, until: null },
     canBoost: false,
+    // Skip to next is a preset (rooms and zones from Heating Manager 3.12, the house from 3.11)
+    canSkip: Array.isArray(a.preset_modes) && a.preset_modes.includes('skip_to_next'),
     sensorsMissing: false,
     sensorsStale: 0,
     hold: null,
@@ -232,7 +234,8 @@ export function describe(hass, stateObj, now = Date.now()) {
     view.monitoringOnly = zone?.attributes?.monitoring_only === true;
     if (zone) view.schedule = scheduleInfo(zone.attributes.schedule, unit);
     const analytics = a.heating_analytics || {};
-    view.trend = trendInfo(analytics.temperature_trend);
+    // Under current from Heating Manager 3.6
+    view.trend = trendInfo(analytics.current?.trend ?? analytics.temperature_trend);
     const eta = analytics.estimated_time_to_target || {};
     if (heating && eta.minutes !== null && eta.minutes !== undefined) {
       view.eta = {
@@ -267,6 +270,11 @@ export function describe(hass, stateObj, now = Date.now()) {
   if (override.active) {
     view.override.active = true;
     view.override.temperature = fromCelsius(override.temperature, unit);
+    // Skipped to the next scheduled temperature (Heating Manager 3.11+). The whole
+    // house says so only in its preset.
+    view.override.skipped = override.skipped === true || a.preset_mode === 'skip_to_next';
+    // When it ends (Heating Manager 3.13+)
+    if (override.until) view.override.until = `${override.until}${override.until_tomorrow ? ' tomorrow' : ''}`;
   }
   return view;
 }
@@ -284,6 +292,58 @@ function scheduleInfo(schedule, unit) {
   };
 }
 
+/** One entry in the card's ⋮ menu. A toggle (Boost, Skip) is a menuitemcheckbox, checked while on. */
+function menuItem({ action, icon, label, on = false, disabled = false, busy = false, why = '' }) {
+  return `<button class="item ${on ? 'on' : ''} ${busy ? 'busy' : ''}" role="menuitemcheckbox" aria-checked="${on}"
+    data-action="${action}" ${disabled || busy ? 'disabled' : ''} title="${why}">
+    <ha-icon icon="${icon}"></ha-icon><span class="label">${label}${disabled && why ? `<span class="why">${why}</span>` : ''}</span></button>`;
+}
+
+/** Skip: to the next scheduled temperature now, or while skipped back to the schedule. */
+function skipItem(view, busy) {
+  const skipped = view.override.active && view.override.skipped;
+  const next = view.schedule?.next;
+  // Nothing to skip to (the house has no schedule of its own: the integration checks its zones')
+  const nothing = view.kind !== 'global' && !next;
+  const why = skipped ? 'Back to the schedule'
+    : view.away ? 'Not in away mode'
+      : view.off ? 'The room is off'
+        : nothing ? 'No schedule change to skip to'
+          : next ? `To ${formatTemp(next.temperature, view.unit, { withUnit: true })} now, the next scheduled temperature`
+            : 'Every zone to its next scheduled temperature now';
+  return menuItem({
+    action: 'skip', icon: 'mdi:skip-next', label: skipped ? 'Cancel skip' : 'Skip to next',
+    on: skipped, busy, disabled: !skipped && (view.away || view.off || nothing), why,
+  });
+}
+
+/** The ⋮ button by the chip, and its menu (kept in the page while closed, so it opens instantly). */
+function actionMenu(items, open, active) {
+  if (!items.length) return '';
+  return `<button class="menu-btn ${active ? 'on' : ''}" data-menu aria-haspopup="menu" aria-expanded="${open}"
+      aria-label="Boost and skip" title="Boost and skip"><ha-icon icon="mdi:dots-vertical"></ha-icon></button>
+    <div class="menu" role="menu" ${open ? '' : 'hidden'}>${items.join('')}</div>`;
+}
+
+/** What a skip looks like before the entity reports it. */
+function applySkip(view, skipped) {
+  if (skipped === (view.override.active && view.override.skipped)) return;
+  view.override = skipped
+    ? { active: true, skipped: true, temperature: view.schedule?.next?.temperature ?? null, until: null }
+    : { active: false, skipped: false, temperature: null, until: null };
+  if (skipped && view.kind === 'room') view.boost.active = false;
+}
+
+/**
+ * When a skip ends: it's at the next period's temperature now, so the period after it.
+ * The schedule attributes still describe the periods as scheduled.
+ */
+function skippedUntil(view) {
+  if (view.override.until) return view.override.until;
+  const n = view.schedule?.next;
+  return n?.end ? `${n.end}${n.tomorrow ? ' tomorrow' : ''}` : null;
+}
+
 /** One line describing what the entity is doing, e.g. "Boost · 42:10 left". */
 export function statusLine(view) {
   if (view.unavailable) return 'Unavailable';
@@ -293,8 +353,12 @@ export function statusLine(view) {
     return view.boost.secondsLeft != null ? `Boost · ${formatCountdown(view.boost.secondsLeft)} left` : 'Boost';
   }
   const parts = [];
-  if (view.override.active) {
-    const until = view.schedule?.current?.end;
+  if (view.override.active && view.override.skipped) {
+    const until = skippedUntil(view);
+    const temp = view.override.temperature != null ? ` · ${formatTemp(view.override.temperature, view.unit, { withUnit: true })}` : '';
+    parts.push(`Skipped${temp}${until ? ` until ${until}` : ''}`);
+  } else if (view.override.active) {
+    const until = view.override.until ?? view.schedule?.current?.end;
     parts.push(until ? `Manual until ${until}` : 'Manual');
   } else if (view.schedule?.current) {
     parts.push(`Schedule until ${view.schedule.current.end}`);
@@ -401,17 +465,37 @@ const STYLES = `
   .info .up { color: var(--hm-heat); }
   .info .down { color: var(--cool-color, var(--info-color, #039be5)); }
   .info .warn { color: var(--hm-warn); }
-  /* The chip, with Boost under it, top right */
-  .side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; }
-  .actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
-  /* The same size as the chip (its 1px border comes out of the padding) */
-  .side .action { height: auto; padding: 1px 7px 1px 5px; gap: 4px; border-radius: 12px; font-size: 12px; }
-  .side .action ha-icon { --mdc-icon-size: 16px; }
+  /* The chip, with the ⋮ menu of Boost and Skip beside it, top right */
+  .side { position: relative; display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
+  .menu-btn { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px;
+    margin: -4px -8px -4px 0; padding: 0; border: none; border-radius: 50%; background: transparent;
+    cursor: pointer; color: var(--secondary-text-color); }
+  .menu-btn ha-icon { --mdc-icon-size: 20px; }
+  .menu-btn:hover, .menu-btn[aria-expanded="true"] { background: var(--secondary-background-color, rgba(127,127,127,0.12)); }
+  /* Something's on (a boost or a skip) */
+  .menu-btn.on { color: var(--hm-boost); }
+  .menu-btn:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 1px; }
+  .menu { position: absolute; top: calc(100% + 6px); right: -8px; z-index: 2; min-width: 190px; max-width: 260px;
+    padding: 4px 0; border-radius: 8px; background: var(--card-background-color, var(--ha-card-background, #fff));
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2), 0 0 0 1px var(--divider-color, rgba(127,127,127,0.2)); }
+  .menu[hidden] { display: none; }
+  .item { display: flex; align-items: flex-start; gap: 10px; width: 100%; padding: 8px 14px; border: none;
+    background: transparent; cursor: pointer; text-align: left; font-size: 14px; color: var(--primary-text-color); }
+  .item ha-icon { --mdc-icon-size: 20px; color: var(--secondary-text-color); flex-shrink: 0; }
+  .item .label { display: flex; flex-direction: column; line-height: 20px; }
+  .item .why { font-size: 12px; line-height: 16px; color: var(--secondary-text-color); }
+  .item:hover:not([disabled]), .item:focus-visible { background: var(--secondary-background-color, rgba(127,127,127,0.12)); outline: none; }
+  .item.on ha-icon, .item.on .label { color: var(--hm-boost); }
+  .item[disabled] { cursor: default; }
+  .item[disabled] > ha-icon, .item[disabled] > .label > :not(.why) { opacity: 0.5; }
+  .item[disabled] .label { color: var(--disabled-text-color, rgba(127,127,127,0.7)); }
+  .item.busy { opacity: 0.6; }
   .action { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px;
     border-radius: 18px; border: 1px solid var(--divider-color, rgba(127,127,127,0.3)); background: transparent;
     cursor: pointer; font-size: 14px; font-weight: 500; color: var(--primary-text-color); }
   .action ha-icon { --mdc-icon-size: 18px; }
   .action:hover:not([disabled]) { background: var(--secondary-background-color, rgba(127,127,127,0.12)); }
+  .action.on:hover:not([disabled]) { background: var(--hm-boost); filter: brightness(0.92); }
   .action[disabled] { opacity: 0.4; cursor: default; }
   .action.on { background: var(--hm-boost); border-color: var(--hm-boost); color: var(--text-primary-color, #fff); }
   .action.busy { opacity: 0.7; }
@@ -485,6 +569,7 @@ class HeatingBaseCard extends HTMLElement {
   disconnectedCallback() {
     this._stopTicker();
     this._cancelHold();
+    if (this._menuOpen) this._setMenu(false, false);
   }
 
   get _stateObj() {
@@ -521,6 +606,19 @@ class HeatingBaseCard extends HTMLElement {
   /** Boost length for countdowns before the entity reports its end time. */
   _boostMinutes(entityId = this._config.entity) {
     return Number(this._config.boost_duration) || roomBoostDuration(this._hass, entityId) || 30;
+  }
+
+  /** Skip to the next scheduled temperature, or while skipped, back to the schedule. */
+  async _toggleSkip(view) {
+    const turnOn = !(view.override.active && view.override.skipped);
+    this._setOptimistic('skip', turnOn);
+    this._update();
+    const ok = await this._call(turnOn ? `skip ${view.name} to its next temperature` : `put ${view.name} back on the schedule`,
+      'climate', 'set_preset_mode', { preset_mode: turnOn ? 'skip_to_next' : 'schedule' }, undefined, 'skip');
+    if (!ok) {
+      this._clearOptimistic('skip');
+      this._update();
+    }
   }
 
   // -- Service calls -------------------------------------------------------
@@ -593,6 +691,7 @@ class HeatingBaseCard extends HTMLElement {
   }
 
   _onKeyDown(ev) {
+    if (this._menuOpen && this._onMenuKey(ev)) return;
     if (ev.key !== 'Enter' && ev.key !== ' ') return;
     const el = this._tapTarget(ev);
     if (!el) return;
@@ -602,10 +701,17 @@ class HeatingBaseCard extends HTMLElement {
 
   _onClick(ev) {
     const path = ev.composedPath();
+    if (path.some((n) => n?.dataset?.menu !== undefined)) {
+      ev.stopPropagation();
+      this._setMenu(!this._menuOpen);
+      return;
+    }
     const button = path.find((n) => n?.dataset?.action !== undefined);
     if (button) {
       ev.stopPropagation();
-      if (!button.disabled) this._onButton(button.dataset.action, button.dataset);
+      if (button.disabled) return;
+      this._setMenu(false, false);
+      this._onButton(button.dataset.action, button.dataset);
       return;
     }
     const tap = this._tapTarget(ev);
@@ -616,6 +722,43 @@ class HeatingBaseCard extends HTMLElement {
       return;
     }
     this._handleAction('tap', tap.dataset.tap || undefined);
+  }
+
+  // -- The ⋮ menu ----------------------------------------------------------
+
+  /** Open or close the menu; opening focuses its first item, closing (by default) the ⋮ button. */
+  _setMenu(open, focusButton = true) {
+    if (open === Boolean(this._menuOpen)) return;
+    this._menuOpen = open;
+    if (open) {
+      this._outside = (ev) => { if (!ev.composedPath().includes(this)) this._setMenu(false, false); };
+      document.addEventListener('pointerdown', this._outside, true);
+    } else {
+      document.removeEventListener('pointerdown', this._outside, true);
+    }
+    this._update(true);
+    const target = open ? this._menuItems()[0] : focusButton && this.shadowRoot.querySelector('[data-menu]');
+    target?.focus?.();
+  }
+
+  _menuItems() {
+    return [...this.shadowRoot.querySelectorAll('.menu .item:not([disabled])')];
+  }
+
+  /** Escape closes the menu; arrows, Home and End move between its items. True if handled. */
+  _onMenuKey(ev) {
+    if (ev.key === 'Escape') {
+      ev.preventDefault();
+      this._setMenu(false);
+      return true;
+    }
+    const items = this._menuItems();
+    const at = items.indexOf(this.shadowRoot.activeElement);
+    const to = { ArrowDown: at + 1, ArrowUp: at - 1, Home: 0, End: items.length - 1 }[ev.key];
+    if (to === undefined || !items.length) return false;
+    ev.preventDefault();
+    items[(to + items.length) % items.length].focus();
+    return true;
   }
 
   // -- Boost countdown -----------------------------------------------------
@@ -752,6 +895,7 @@ export class HeatingRoomCard extends HeatingBaseCard {
     } else {
       view.boost.active = this._resolve('boost', view.boost.active);
     }
+    applySkip(view, this._resolve('skip', view.override.active && view.override.skipped));
     // Countdowns are drawn live from the end time; seconds left would re-render every second
     view.boost.endMs = view.kind === 'room' && view.boost.active && view.boost.endTime
       ? new Date(view.boost.endTime).getTime() : null;
@@ -783,7 +927,8 @@ export class HeatingRoomCard extends HeatingBaseCard {
         : globalSummary(view);
 
     const info = [];
-    if (config.show_schedule !== false && view.schedule?.next && !view.away) {
+    // Skipped: the next period is the one it's on already
+    if (config.show_schedule !== false && view.schedule?.next && !view.away && !view.override.skipped) {
       const n = view.schedule.next;
       info.push(`<span title="Next schedule period"><ha-icon icon="mdi:calendar-clock"></ha-icon>${n.tomorrow ? 'Tomorrow ' : ''}${escapeHtml(n.start)} → ${formatTemp(n.temperature, unit, { withUnit: true })}</span>`);
     }
@@ -807,18 +952,22 @@ export class HeatingRoomCard extends HeatingBaseCard {
     const actions = [];
     if (controls && !view.unavailable) {
       if (view.kind === 'room') {
-        const boostTitle = !view.canBoost ? 'Boost needs a temperature sensor in this room'
-          : view.boost.active ? 'Cancel boost' : `Boost for ${formatDuration(this._boostMinutes())}`;
-        actions.push(`<button class="action ${view.boost.active ? 'on' : ''} ${busy.boost ? 'busy' : ''}" data-action="boost"
-          ${(!view.boost.active && (!view.canBoost || view.away)) || busy.boost ? 'disabled' : ''} title="${boostTitle}" aria-label="${boostTitle}" aria-pressed="${view.boost.active}">
-          <ha-icon icon="mdi:rocket-launch"></ha-icon>${view.boost.active ? 'Cancel boost' : 'Boost'}</button>`);
+        actions.push(menuItem({
+          action: 'boost', icon: 'mdi:rocket-launch', on: view.boost.active, busy: busy.boost,
+          label: view.boost.active ? 'Cancel boost' : `Boost for ${formatDuration(this._boostMinutes())}`,
+          disabled: !view.boost.active && (!view.canBoost || view.away),
+          why: !view.canBoost ? 'Needs a temperature sensor in this room' : view.away ? 'Not in away mode' : '',
+        }));
       } else {
-        const label = view.boost.active ? 'Cancel boosts' : 'Boost all';
-        const title = view.boost.active ? 'Cancel every boost and manual temperature' : 'Boost every room with a sensor';
-        actions.push(`<button class="action ${view.boost.active ? 'on' : ''}" data-action="boost" ${busy.boost || (view.away && !view.boost.active) ? 'disabled' : ''}
-          title="${title}" aria-pressed="${view.boost.active}"><ha-icon icon="mdi:rocket-launch"></ha-icon>${label}</button>`);
+        actions.push(menuItem({
+          action: 'boost', icon: 'mdi:rocket-launch', on: view.boost.active, busy: busy.boost,
+          label: view.boost.active ? 'Cancel boosts' : 'Boost all',
+          disabled: view.away && !view.boost.active, why: view.away ? 'Not in away mode' : '',
+        }));
       }
+      if (view.canSkip) actions.push(skipItem(view, busy.skip));
     }
+    const menu = actionMenu(actions, Boolean(this._menuOpen), view.boost.active || (view.override.active && view.override.skipped));
 
     const target = `<div class="target"><div class="target-value"><div class="label">Target</div>
       <div class="value">${view.off ? 'Off' : formatTemp(view.target, unit, { withUnit: true })}</div></div></div>`;
@@ -835,7 +984,7 @@ export class HeatingRoomCard extends HeatingBaseCard {
             </div>
             <div class="side">
               <span class="chip ${chip.level}"><ha-icon icon="${chip.icon}"></ha-icon>${chip.label}</span>
-              ${actions.length ? `<div class="actions">${actions.join('')}</div>` : ''}
+              ${menu}
             </div>
           </div>
           <div class="main">
@@ -849,7 +998,9 @@ export class HeatingRoomCard extends HeatingBaseCard {
   }
 
   _onButton(action) {
-    if (action === 'boost' && this._stateObj) this._toggleBoost(this._model().view);
+    if (!this._stateObj) return;
+    if (action === 'boost') this._toggleBoost(this._model().view);
+    if (action === 'skip') this._toggleSkip(this._model().view);
   }
 
   async _toggleBoost(view) {
@@ -939,6 +1090,7 @@ export class HeatingZoneCard extends HeatingBaseCard {
     const zone = describe(this._hass, stateObj);
     if (this._config.name) zone.name = this._config.name;
     zone.boost.active = this._resolve('boost', zone.boost.active);
+    applySkip(zone, this._resolve('skip', zone.override.active && zone.override.skipped));
     const rooms = roomsOfZone(this._hass, stateObj.attributes.zone_id, this._config.rooms).map((s) => {
       const view = describe(this._hass, s);
       const boost = view.boost.active;
@@ -953,6 +1105,7 @@ export class HeatingZoneCard extends HeatingBaseCard {
         away: view.away,
         unavailable: view.unavailable,
         override: view.override.active,
+        skipped: view.override.active && view.override.skipped,
         boost,
         endMs: boost ? endMs : null,
         sensorsStale: view.sensorsStale,
@@ -972,12 +1125,17 @@ export class HeatingZoneCard extends HeatingBaseCard {
     const nowTemp = zone.override.active ? zone.override.temperature
       : sched?.current ? sched.current.temperature : sched?.temperature;
     const nowLabel = zone.override.active ? 'Manual' : 'Now';
+    const skipped = zone.override.active && zone.override.skipped && !zone.away;
+    const until = skipped ? skippedUntil(zone) : null;
+    const nowUntil = zone.override.active ? zone.override.until ?? sched?.current?.end : sched?.current?.end;
     const now = zone.away ? 'Away · frost protection'
+      : skipped ? `Skipped to ${formatTemp(zone.override.temperature, unit, { withUnit: true })}${until ? ` until ${escapeHtml(until)}` : ''}`
       : nowTemp != null
-        ? `${nowLabel} ${formatTemp(nowTemp, unit, { withUnit: true })}${sched?.current?.end ? ` until ${escapeHtml(sched.current.end)}` : ''}`
+        ? `${nowLabel} ${formatTemp(nowTemp, unit, { withUnit: true })}${nowUntil ? ` until ${escapeHtml(nowUntil)}` : ''}`
         : '';
     const n = sched?.next;
-    const next = n && !zone.away
+    // Skipped: it's on the next period already
+    const next = n && !zone.away && !skipped
       ? `Next ${formatTemp(n.temperature, unit, { withUnit: true })} ${n.end ? `until ${escapeHtml(n.end)}` : `from ${escapeHtml(n.start)}`}${n.tomorrow ? ' tomorrow' : ''}`
       : '';
     const demand = zoneDemand(zone);
@@ -987,7 +1145,7 @@ export class HeatingZoneCard extends HeatingBaseCard {
       const icon = r.off ? 'mdi:power' : boosted ? 'mdi:rocket-launch' : r.heating ? 'mdi:fire' : 'mdi:thermometer';
       const iconClass = r.off ? 'off' : r.heating || boosted ? 'heating' : '';
       let status = r.unavailable ? 'Unavailable' : r.off ? 'Off' : r.away ? 'Away' : r.heating ? 'Heating' : 'Idle';
-      if (r.override && !r.boost && !r.off) status += ' · manual';
+      if (r.override && !r.boost && !r.off) status += r.skipped ? ' · skipped' : ' · manual';
       if (r.sensorsStale) status += ` · ${r.sensorsStale} sensor${r.sensorsStale === 1 ? '' : 's'} not reporting`;
       const statusHtml = boosted && r.endMs
         ? `<span data-countdown="${r.endMs}" data-prefix="Boost · " data-suffix=" left">Boost · ${formatCountdown((r.endMs - Date.now()) / 1000)} left</span>`
@@ -1001,12 +1159,16 @@ export class HeatingZoneCard extends HeatingBaseCard {
     });
 
     const actions = [];
-    // In away mode only a lingering boost can be cancelled
-    if (config.show_controls !== false && (!zone.away || zone.boost.active)) {
-      actions.push(`<button class="action ${zone.boost.active ? 'on' : ''}" data-action="boost" ${busy.boost ? 'disabled' : ''}
-        aria-pressed="${zone.boost.active}" title="${zone.boost.active ? 'Cancel every boost and manual temperature in this zone' : 'Boost every room with a sensor'}">
-        <ha-icon icon="mdi:rocket-launch"></ha-icon>${zone.boost.active ? 'Cancel boosts' : 'Boost all'}</button>`);
+    if (config.show_controls !== false && !zone.unavailable) {
+      // In away mode only a lingering boost can be cancelled
+      actions.push(menuItem({
+        action: 'boost', icon: 'mdi:rocket-launch', on: zone.boost.active, busy: busy.boost,
+        label: zone.boost.active ? 'Cancel boosts' : 'Boost all',
+        disabled: zone.away && !zone.boost.active, why: zone.away ? 'Not in away mode' : '',
+      }));
+      if (zone.canSkip) actions.push(skipItem(zone, busy.skip));
     }
+    const menu = actionMenu(actions, Boolean(this._menuOpen), zone.boost.active || (zone.override.active && zone.override.skipped));
 
     return `
       <ha-card class="${zone.unavailable ? 'unavailable' : ''}">
@@ -1021,7 +1183,7 @@ export class HeatingZoneCard extends HeatingBaseCard {
             </div>
             <div class="side">
               <span class="chip ${chip.level}"><ha-icon icon="${chip.icon}"></ha-icon>${chip.label}</span>
-              ${actions.length ? `<div class="actions">${actions.join('')}</div>` : ''}
+              ${menu}
             </div>
           </div>
           <div class="rows">${rows.join('') || '<div class="empty">No rooms in this zone yet. Add them in the zone\'s settings on the Heating Manager integration page.</div>'}</div>
@@ -1031,7 +1193,9 @@ export class HeatingZoneCard extends HeatingBaseCard {
 
   _onButton(action) {
     const view = this._model();
-    if (!view.problem && action === 'boost') this._toggleZoneBoost(view.zone);
+    if (view.problem) return;
+    if (action === 'boost') this._toggleZoneBoost(view.zone);
+    if (action === 'skip') this._toggleSkip(view.zone);
   }
 
   async _toggleZoneBoost(zone) {
@@ -1056,7 +1220,7 @@ const ENTITY_FILTER = { integration: DOMAIN, domain: 'climate' };
 const LABELS = {
   entity: 'Room, zone or whole house',
   name: 'Name',
-  show_controls: 'Show the Boost button',
+  show_controls: 'Show the Boost and Skip menu (⋮)',
   show_schedule: 'Show the next schedule change',
   show_analytics: 'Show trend and time to target',
   boost_duration: 'Boost length (minutes)',

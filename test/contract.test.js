@@ -7,7 +7,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import '../heating-manager-ui.js';
 import {
   FIXTURE_NOW, GLOBAL, KITCHEN, ROOM, SERVICE_CALLS, ZONE,
-  button, click, flush, makeHass, mount, withState,
+  button, click, flush, makeHass, mount, withSkip, withState,
 } from './helpers.js';
 
 beforeEach(() => {
@@ -50,6 +50,16 @@ it('every call the cards make is in the contract, and every contract call is mad
   click(button(house, 'boost'));
   // Zone card
   click(button(mount('heating-zone-card', { entity: ZONE }, hass), 'boost'));
+
+  // Skip (Heating Manager 3.12+): on a room and back, a zone, the whole house
+  const skippable = withSkip(hass);
+  const skipRoom = mount('heating-room-card', { entity: KITCHEN }, skippable);
+  click(button(skipRoom, 'skip'));
+  click(button(mount('heating-room-card', { entity: KITCHEN }, withState(skippable, KITCHEN, {
+    attributes: { manual_override: { active: true, temperature: 21, skipped: true } },
+  })), 'skip'));
+  click(button(mount('heating-zone-card', { entity: ZONE }, skippable), 'skip'));
+  click(button(mount('heating-room-card', { entity: GLOBAL }, skippable), 'skip'));
 
   const calls = hass.callService.mock.calls;
   const unmatched = calls.filter((call) => !contractFor(call));

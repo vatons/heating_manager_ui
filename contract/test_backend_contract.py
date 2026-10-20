@@ -215,7 +215,9 @@ async def test_states_celsius(hass: HomeAssistant, heating):
     assert room["state"] == "heat"
     assert room["attributes"]["room_id"] == "lounge"
     assert room["attributes"]["boost"]["duration_minutes"] == 60
-    assert room["attributes"]["heating_analytics"]["temperature_trend"]
+    analytics = room["attributes"]["heating_analytics"]
+    # The card reads either: current.trend from Heating Manager 3.6
+    assert (analytics.get("current") or {}).get("trend") or analytics.get("temperature_trend")
     assert data["states"][ROOM_OFF]["state"] == "off"
     assert data["states"][ZONE]["attributes"]["schedule"]["current_period"]["start"] == "09:00"
     assert data["states"][GLOBAL]["attributes"]["total_zones"] == 2
@@ -272,6 +274,18 @@ EXPECT = {
     and not attrs(hass, ZONE)["manual_override"]["active"],
     "global_schedule": lambda hass: attrs(hass, GLOBAL)["preset_mode"] == "schedule"
     and not attrs(hass, GLOBAL)["boost"]["active"],
+    # Skip to next: the next scheduled temperature now
+    "room_skip": lambda hass: attrs(hass, ROOM)["preset_mode"] == "skip_to_next"
+    and attrs(hass, ROOM)["manual_override"]["skipped"],
+    # Skipped, back to the schedule
+    "room_schedule": lambda hass: attrs(hass, ROOM)["preset_mode"] == "schedule"
+    and not attrs(hass, ROOM)["manual_override"]["active"],
+    "zone_skip": lambda hass: attrs(hass, ZONE)["preset_mode"] == "skip_to_next"
+    and attrs(hass, ZONE)["manual_override"]["skipped"]
+    # Its rooms follow it, and say so
+    and attrs(hass, ROOM)["manual_override"]["skipped"],
+    "global_skip": lambda hass: attrs(hass, GLOBAL)["preset_mode"] == "skip_to_next"
+    and attrs(hass, ZONE)["manual_override"]["skipped"],
     "global_boost": lambda hass: attrs(hass, GLOBAL)["boost"]["active"]
     and sorted(attrs(hass, GLOBAL)["boost"]["room_ids"])
     == ["downstairs/kitchen", "downstairs/lounge", "downstairs/study", "upstairs/bathroom"],
@@ -285,6 +299,7 @@ SETUP = {
         ("climate", "set_temperature", {"temperature": 22}, ZONE),
     ],
     "global_schedule": [("climate", "set_preset_mode", {"preset_mode": "boost"}, GLOBAL)],
+    "room_schedule": [("climate", "set_preset_mode", {"preset_mode": "skip_to_next"}, ROOM)],
 }
 
 
@@ -294,6 +309,8 @@ def test_every_call_has_an_expectation():
 
 @pytest.mark.parametrize("spec", CALLS, ids=[c["id"] for c in CALLS])
 async def test_service_call(hass: HomeAssistant, heating, spec):
+    if "since" in spec and _version() < tuple(int(part) for part in spec["since"].split(".")):
+        pytest.skip(f"needs Heating Manager {spec['since']}")
     await heating()
     for args in SETUP.get(spec["id"], []):
         await call(hass, *args)

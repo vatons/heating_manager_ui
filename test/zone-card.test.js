@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { HeatingZoneCard } from '../heating-manager-ui.js';
 import {
   $, $$, FIXTURE_NOW, HALL, KITCHEN, ROOM, STUDY, UPSTAIRS, ZONE,
-  button, captureEvents, click, flush, makeHass, mount, text, withState,
+  button, captureEvents, click, flush, makeHass, mount, text, withSkip, withState,
 } from './helpers.js';
 
 const TAG = 'heating-zone-card';
@@ -134,7 +134,9 @@ describe('zone card', () => {
   it('in away mode', () => {
     const el = mount(TAG, { entity: ZONE }, makeHass('v3.2.0-away'));
     expect($$(el, '.title .sub:not([style])').map(text)).toEqual(['Away · frost protection']);
-    expect(button(el, 'boost')).toBeNull();
+    // In the menu, but disabled, saying why
+    expect(button(el, 'boost').disabled).toBe(true);
+    expect(text($(el, '[data-action="boost"] .why'))).toBe('Not in away mode');
   });
 
   it('in away mode with a boost still running', () => {
@@ -161,6 +163,55 @@ describe('zone card', () => {
     expect(text($(el, '.sub.now'))).toBe('Manual 21.0°C until 17:00');
     // Cleared from the zone's dialog (Preset: Schedule)
     expect(button(el, 'schedule')).toBeNull();
+  });
+
+  it('a zone skipped to its next scheduled temperature, and its rooms', () => {
+    let hass = withState(makeHass(), ZONE, {
+      attributes: { preset_mode: 'skip_to_next', manual_override: { active: true, temperature: 21, skipped: true } },
+    });
+    hass = withState(hass, HALL, {
+      attributes: { preset_mode: 'skip_to_next', manual_override: { active: true, temperature: 21, skipped: true, from_zone: true } },
+    });
+    const el = mount(TAG, { entity: ZONE }, hass);
+    // On the next period already: no Next line
+    expect($$(el, '.title .sub:not([style])').map(text)).toEqual(['Skipped to 21.0°C until 22:30']);
+    expect(rows(el)[0].status).toBe('Idle · skipped');
+    expect(rows(el)[1].status).toBe('Heating · manual');
+  });
+
+  it('a skipped zone says until when, from until (Heating Manager 3.13+)', () => {
+    const hass = withState(makeHass(), ZONE, {
+      attributes: { manual_override: { active: true, temperature: 21, skipped: true, until: '23:00', until_tomorrow: false } },
+    });
+    const el = mount(TAG, { entity: ZONE }, hass);
+    expect(text($(el, '.sub.now'))).toBe('Skipped to 21.0°C until 23:00');
+  });
+
+  it('a zone manual temperature says until when, from until', () => {
+    const hass = withState(makeHass(), ZONE, {
+      attributes: { manual_override: { active: true, temperature: 21, until: '07:00', until_tomorrow: true } },
+    });
+    expect(text($(mount(TAG, { entity: ZONE }, hass), '.sub.now'))).toBe('Manual 21.0°C until 07:00 tomorrow');
+  });
+
+  it('Skip skips the zone, showing it straight away (Heating Manager 3.12+)', async () => {
+    const hass = withSkip(makeHass());
+    const el = mount(TAG, { entity: ZONE }, hass);
+    expect($$(el, '[data-action]').map((b) => b.dataset.action)).toEqual(['boost', 'skip']);
+    click(button(el, 'skip'));
+    expect(hass.callService).toHaveBeenCalledWith('climate', 'set_preset_mode', { preset_mode: 'skip_to_next' },
+      { entity_id: ZONE }, false);
+    await flush();
+    expect($$(el, '.title .sub:not([style])').map(text)).toEqual(['Skipped to 21.0°C until 22:30']);
+    expect(text(button(el, 'skip'))).toBe('Cancel skip');
+  });
+
+  it('a skipped zone in away mode shows away', () => {
+    const hass = withState(makeHass('v3.2.0-away'), ZONE, {
+      attributes: { manual_override: { active: true, temperature: 21, skipped: true } },
+    });
+    const el = mount(TAG, { entity: ZONE }, hass);
+    expect($$(el, '.title .sub:not([style])').map(text)).toEqual(['Away · frost protection']);
   });
 
   it('needs a zone', () => {

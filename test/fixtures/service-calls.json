@@ -1,5 +1,5 @@
 {
-  "_comment": "Every Home Assistant service call the cards make (Boost and Boost all; everything else is in the more-info dialog). contract/test_backend_contract.py runs each one against the real Heating Manager integration; the JS tests check that the cards only make calls listed here.",
+  "_comment": "Every Home Assistant service call the cards make (Boost, Boost all and Skip; everything else is in the more-info dialog). since: the Heating Manager version a call needs. contract/test_backend_contract.py runs each one against the real Heating Manager integration; the JS tests check that the cards only make calls listed here.",
   "calls": [
     { "id": "room_boost_default", "domain": "heating_manager", "service": "set_boost", "data": {}, "target": "room" },
     { "id": "room_boost", "domain": "heating_manager", "service": "set_boost", "data": { "duration": 60 }, "target": "room" },
@@ -8,6 +8,10 @@
     { "id": "zone_boost", "domain": "climate", "service": "set_preset_mode", "data": { "preset_mode": "boost" }, "target": "zone" },
     { "id": "zone_schedule", "domain": "climate", "service": "set_preset_mode", "data": { "preset_mode": "schedule" }, "target": "zone" },
     { "id": "global_schedule", "domain": "climate", "service": "set_preset_mode", "data": { "preset_mode": "schedule" }, "target": "global" },
-    { "id": "global_boost", "domain": "climate", "service": "set_preset_mode", "data": { "preset_mode": "boost" }, "target": "global" }
+    { "id": "global_boost", "domain": "climate", "service": "set_preset_mode", "data": { "preset_mode": "boost" }, "target": "global" },
+    { "id": "room_skip", "domain": "climate", "service": "set_preset_mode", "data": { "preset_mode": "skip_to_next" }, "target": "room", "since": "3.12" },
+    { "id": "room_schedule", "domain": "climate", "service": "set_preset_mode", "data": { "preset_mode": "schedule" }, "target": "room", "since": "3.12" },
+    { "id": "zone_skip", "domain": "climate", "service": "set_preset_mode", "data": { "preset_mode": "skip_to_next" }, "target": "zone", "since": "3.12" },
+    { "id": "global_skip", "domain": "climate", "service": "set_preset_mode", "data": { "preset_mode": "skip_to_next" }, "target": "global", "since": "3.11" }
   ]
 }

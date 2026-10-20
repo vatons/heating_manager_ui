@@ -356,6 +356,11 @@ async function main() {
       await page.waitForTimeout(600);
     };
     const kitchenCard = page.locator('heating-room-card').filter({ has: page.locator('.name', { hasText: /^Kitchen$/ }) });
+    // Boost and Skip are in each card's ⋮ menu
+    const pick = async (card, action) => {
+      await card.locator('[data-menu]').click();
+      await card.locator(`[data-action="${action}"]`).click();
+    };
 
     await step('shows the room from the live entity', async () => {
       const state = await getState(token, 'climate.downstairs_lounge');
@@ -365,16 +370,17 @@ async function main() {
     });
 
     await step('boosts a room', async () => {
-      await loungeCard.locator('[data-action="boost"]').click();
+      await pick(loungeCard, 'boost');
       await waitFor(async () => (await getState(token, 'climate.downstairs_lounge')).attributes.preset_mode === 'boost',
         'the lounge to be boosted', 20000, 250);
       await loungeCard.locator('[data-countdown]').waitFor();
       assert.match(await loungeCard.locator('.status').textContent(), /Boost · (29|30):\d\d left/);
-      assert.equal(await loungeCard.locator('[data-action="boost"]').getAttribute('aria-pressed'), 'true');
+      assert.equal(await loungeCard.locator('[data-action="boost"]').getAttribute('aria-checked'), 'true');
     });
 
-    await step('the cards offer only Boost, without hints', async () => {
-      assert.deepEqual(await kitchenCard.locator('[data-action]').evaluateAll((els) => els.map((e) => e.dataset.action)), ['boost']);
+    await step('the cards offer only Boost (and Skip from Heating Manager 3.12), without hints', async () => {
+      assert.deepEqual(await kitchenCard.locator('[data-action]').evaluateAll((els) => els.map((e) => e.dataset.action)),
+        BACKEND_VERSION >= 312 ? ['boost', 'skip'] : ['boost']);
       assert.equal(await page.locator('heating-room-card .hint, heating-zone-card .hint').count(), 0);
       assert.equal(await page.locator('heating-zone-card .row button').count(), 0);
     });
@@ -414,6 +420,49 @@ async function main() {
       await waitFor(async () => /^Schedule until/.test(await kitchenCard.locator('.status').textContent()), 'the card to say Schedule', 20000, 250);
     });
 
+    await step('Skip on a room card skips it, and pressed again goes back to the schedule (Heating Manager 3.12+)', async () => {
+      if (BACKEND_VERSION < 312) return;
+      const skip = kitchenCard.locator('[data-action="skip"]');
+      await pick(kitchenCard, 'skip');
+      await waitFor(async () => (await getState(token, 'climate.downstairs_kitchen')).attributes.manual_override.skipped === true,
+        'the kitchen to skip', 20000, 250);
+      await waitFor(async () => /^Skipped · [\d.]+°C until /.test(await kitchenCard.locator('.status').textContent()), 'the card to say Skipped', 20000, 250);
+      assert.equal(await skip.getAttribute('aria-checked'), 'true');
+      // The menu, open, with the skip on
+      await kitchenCard.locator('[data-menu]').click();
+      await page.screenshot({ path: join(SHOTS, 'menu.png'), fullPage: true });
+      await skip.click();
+      await waitFor(async () => !(await getState(token, 'climate.downstairs_kitchen')).attributes.manual_override.active,
+        'the kitchen back on the schedule', 20000, 250);
+      await waitFor(async () => /^Schedule until/.test(await kitchenCard.locator('.status').textContent()), 'the card to say Schedule', 20000, 250);
+    });
+
+    await step('skips the zone to its next temperature in the dialog, and the cards say so (Heating Manager 3.12+)', async () => {
+      if (BACKEND_VERSION < 312) return; // skip_to_next is a room and zone preset from 3.12
+      const zone = page.locator('heating-zone-card');
+      await openDialog(zone, 'Downstairs');
+      await choose('Preset', 'Skip to next');
+      await waitFor(async () => (await getState(token, 'climate.downstairs')).attributes.manual_override.skipped === true,
+        'the zone to skip', 20000, 250);
+      await closeDialog();
+      await waitFor(async () => /^Skipped to [\d.]+°C/.test(await zone.locator('.sub.now').textContent()), 'the zone card to say Skipped', 20000, 250);
+      if (BACKEND_VERSION >= 313) {
+        // until on manual_override says when the skip ends
+        const { until } = (await getState(token, 'climate.downstairs')).attributes.manual_override;
+        assert.match(await zone.locator('.sub.now').textContent(), new RegExp(`until ${until}( tomorrow)?$`));
+      }
+      assert.equal(await zone.locator('.sub.next').count(), 0);
+      await waitFor(async () => /^Skipped · [\d.]+°C/.test(await kitchenCard.locator('.status').textContent()), 'the kitchen to say Skipped', 20000, 250);
+      assert.match(await zone.locator('.row', { hasText: 'Kitchen' }).locator('.rstatus').textContent(), /· skipped$/);
+      await page.screenshot({ path: join(SHOTS, 'skipped.png'), fullPage: true });
+      await openDialog(zone, 'Downstairs');
+      await choose('Preset', 'Schedule');
+      await waitFor(async () => !(await getState(token, 'climate.downstairs')).attributes.manual_override.active,
+        'the skip to end', 20000, 250);
+      await closeDialog();
+      await waitFor(async () => /^Now /.test(await zone.locator('.sub.now').textContent()), 'the zone card back on the schedule', 20000, 250);
+    });
+
     await step('turns a boosted room off and on in the dialog', async () => {
       await openDialog(loungeCard, 'Downstairs Lounge');
       await choose('Mode', 'Off');
@@ -424,7 +473,7 @@ async function main() {
         // Switching off ends the boost (it was boosted above)
         await waitFor(async () => (await getState(token, 'climate.downstairs_lounge')).attributes.boost.temperature === null,
           'the boost to end', 20000, 250);
-        await waitFor(async () => (await loungeCard.locator('[data-action="boost"]').getAttribute('aria-pressed')) === 'false',
+        await waitFor(async () => (await loungeCard.locator('[data-action="boost"]').getAttribute('aria-checked')) === 'false',
           'Boost to show as off', 20000, 250);
       }
       await openDialog(loungeCard, 'Downstairs Lounge');
@@ -451,11 +500,11 @@ async function main() {
       const zone = page.locator('heating-zone-card');
       const label = (await zone.locator('[data-action="boost"]').textContent()).trim();
       if (label === 'Cancel boosts') {
-        await zone.locator('[data-action="boost"]').click();
+        await pick(zone, 'boost');
         await waitFor(async () => !(await getState(token, 'climate.downstairs')).attributes.boost.active, 'boosts to end', 20000, 250);
         await page.waitForTimeout(11000); // the integration refreshes at most every 10 s
       }
-      await zone.locator('[data-action="boost"]').click();
+      await pick(zone, 'boost');
       await waitFor(async () => (await getState(token, 'climate.downstairs')).attributes.boost.room_ids.length === 3,
         'every room with a sensor to be boosted', 20000, 250);
       await waitFor(async () => (await zone.locator('[data-countdown]').count()) === 3, 'three countdowns', 20000, 250);
@@ -490,7 +539,7 @@ async function main() {
       assert.equal(await preview.textContent(), 'Kitchen');
       // Turning a switch in the visual editor updates the preview
       await editor.getByText('Display', { exact: true }).first().click();
-      await editor.getByText('Show the Boost button').first().waitFor({ timeout: 15000 });
+      await editor.getByText('Show the Boost and Skip menu (⋮)').first().waitFor({ timeout: 15000 });
       await page.screenshot({ path: join(SHOTS, 'card-editor-display.png') });
       await editor.locator('ha-switch').first().click();
       await waitFor(async () => (await page.locator('hui-dialog-edit-card heating-room-card .actions').count()) === 0,
